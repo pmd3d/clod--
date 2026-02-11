@@ -46,7 +46,7 @@ type node_id =
             | _ ->
                 invalidArg "obj" "Cannot compare values of different types"
 
-type 'v basic_block<'instr> = {
+type basic_block<'v, 'instr> = {
     id: node_id
     instructions: ('v * 'instr) list
     mutable preds: node_id list
@@ -54,9 +54,9 @@ type 'v basic_block<'instr> = {
     value: 'v
 }
 
-type 'v t<'instr> = {
+type t<'v, 'instr> = {
     (* store basic blocks in association list, indexed by block # *)
-    basic_blocks: (int * 'v basic_block<'instr>) list
+    basic_blocks: (int * basic_block<'v, 'instr>) list
     mutable entry_succs: node_id list
     mutable exit_preds: node_id list
     debug_label: string
@@ -206,9 +206,9 @@ let strip_annotations cfg = initialize_annotation cfg ()
 (* debugging *)
 let print_graphviz (pp_instr: System.IO.TextWriter -> 'instr -> unit)
                    (pp_val: System.IO.TextWriter -> 'v -> unit)
-                   (cfg: 'v t<'instr>) =
+                   (cfg: t<'v, 'instr>) =
     let filename =
-        Unique_ids.make_label cfg.debug_label + ".dot"
+        UniqueIds.makeLabel cfg.debug_label + ".dot"
     let path =
         if System.IO.Path.IsPathRooted(filename) then filename
         else System.IO.Path.Combine(System.IO.Directory.GetCurrentDirectory(), filename)
@@ -248,7 +248,7 @@ let print_graphviz (pp_instr: System.IO.TextWriter -> 'instr -> unit)
     let pp_edge i (out: System.IO.TextWriter) succ =
         out.Write(sprintf "block%d -> " i)
         pp_node_id out succ
-    let pp_edges (out: System.IO.TextWriter) ((lbl: int), (blk: 'a basic_block<_>)) =
+    let pp_edges (out: System.IO.TextWriter) ((lbl: int), (blk: basic_block<'a, _>)) =
         List.iter (pp_edge lbl out) blk.succs
     writer.WriteLine("digraph {")
     writer.WriteLine("  labeljust=l")
@@ -264,11 +264,9 @@ let print_graphviz (pp_instr: System.IO.TextWriter -> 'instr -> unit)
     let cmd =
         sprintf "dot -Tpng %s -o %s" filename
             (System.IO.Path.ChangeExtension(filename, ".png"))
-    if System.Diagnostics.Process.Start("bash", "-c \"" + cmd + "\"")
-           .WaitForExit(30000)
-       |> ignore
-       ; false
-    then failwith ("graphviz fail: " + cmd)
+    let proc = System.Diagnostics.Process.Start("bash", "-c \"" + cmd + "\"")
+    let finished = proc.WaitForExit(30000)
+    if not finished then failwith ("graphviz fail: " + cmd)
 
 
 module TackyCfg =

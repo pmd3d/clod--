@@ -30,7 +30,7 @@ let show_fun_name f =
     match !Settings.platform with
     | OS_X -> "_" + f
     | Linux ->
-        if Assembly_symbols.is_defined f then f else f + "@PLT"
+        if AssemblySymbols.is_defined f then f else f + "@PLT"
 
 let show_long_reg = function
     | AX -> "%eax"
@@ -117,26 +117,26 @@ let show_byte_reg = function
 
 let show_operand t = function
     | Reg r ->
-        match t with
+        (match t with
         | Byte -> show_byte_reg r
         | Longword -> show_long_reg r
         | Quadword -> show_quadword_reg r
         | Double -> show_double_reg r
         | ByteArray _ ->
             failwith
-                "Internal error: can't store non-scalar operand in register"
+                "Internal error: can't store non-scalar operand in register")
     | Imm i -> sprintf "$%s" (string i)
     | Memory(r, 0) -> sprintf "(%s)" (show_quadword_reg r)
     | Memory(r, i) -> sprintf "%d(%s)" i (show_quadword_reg r)
     | Data(name, offset) ->
         let lbl =
-            if Assembly_symbols.is_constant name then
+            if AssemblySymbols.is_constant name then
                 show_local_label name
             else show_label name
         if offset = 0 then sprintf "%s(%%rip)" lbl
         else sprintf "%s+%d(%%rip)" lbl offset
-    | Indexed { base = base; index = index; scale = scale } ->
-        sprintf "(%s, %s, %d)" (show_quadword_reg base)
+    | Indexed { ``base`` = b; index = index; scale = scale } ->
+        sprintf "(%s, %s, %d)" (show_quadword_reg b)
             (show_quadword_reg index) scale
     (* printing out pseudoregisters is only for debugging *)
     | Pseudo name -> sprintf "%%%s" name
@@ -268,12 +268,12 @@ let emit_instruction (chan: System.IO.StreamWriter) = function
         failwith
             "Internal error: can't apply cdq to a byte or non-integer type"
 
-let emit_global_directive (chan: System.IO.StreamWriter) global label =
-    if global then chan.Write(sprintf "\t.globl %s\n" label)
+let emit_global_directive (chan: System.IO.StreamWriter) ``global`` label =
+    if ``global`` then chan.Write(sprintf "\t.globl %s\n" label)
 
 let escape s =
     let escape_char c =
-        if StringUtil.is_alnum c then string c
+        if StringUtil.isAlnum c then string c
         (* use octal escape for everything except alphanumeric values
          * make sure to pad out octal escapes to 3 digits so we don't, e.g.
          * escape "hello 1" as "hello\401" *)
@@ -330,27 +330,27 @@ let emit_constant (chan: System.IO.StreamWriter) name alignment init =
         emit_init chan (Initializers.LongInit 0L)
 
 let emit_tl (chan: System.IO.StreamWriter) = function
-    | Function { name = name; global = global;
+    | Function { name = name; ``global`` = isGlobal;
                  instructions = instructions } ->
         let label = show_label name
-        emit_global_directive chan global label
+        emit_global_directive chan isGlobal label
         chan.Write(
             sprintf "\n\t.text\n%s:\n\tpushq %%rbp\n\tmovq %%rsp, %%rbp\n"
                 label)
         List.iter (emit_instruction chan) instructions
-    | StaticVariable { name = name; global = global; init = init;
+    | StaticVariable { name = name; ``global`` = isGlobal; init = init;
                        alignment = alignment }
         when List.forall Initializers.is_zero init ->
         let label = show_label name
-        emit_global_directive chan global label
+        emit_global_directive chan isGlobal label
         chan.Write(
             sprintf "\n\t.bss\n\t%s %d\n%s:\n"
                 align_directive alignment label)
         List.iter (emit_init chan) init
-    | StaticVariable { name = name; global = global; init = init;
+    | StaticVariable { name = name; ``global`` = isGlobal; init = init;
                        alignment = alignment } ->
         let label = show_label name
-        emit_global_directive chan global label
+        emit_global_directive chan isGlobal label
         chan.Write(
             sprintf "\n\t.data\n\t%s %d\n%s:\n"
                 align_directive alignment label)

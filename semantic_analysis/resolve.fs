@@ -41,7 +41,7 @@ let rec resolve_type struct_map = function
             List.map (resolve_type struct_map) param_types
         let resolved_ret_type = resolve_type struct_map ret_type
         FunType
-            ( paramTypes = resolved_param_types; ret_type = resolved_ret_type )
+            ( paramTypes = resolved_param_types, retType = resolved_ret_type )
     | t -> t
 
 let rec resolve_exp struct_map id_map = function
@@ -82,10 +82,10 @@ let rec resolve_exp struct_map id_map = function
             }
     | Exp.SizeOf e -> SizeOf (resolve_exp struct_map id_map e)
     | Exp.SizeOfT t -> SizeOfT (resolve_type struct_map t)
-    | Exp.Dot { strct = strct; member = member } ->
-        Exp.Dot { strct = resolve_exp struct_map id_map strct; member = member }
-    | Arrow { strct = strct; member = member } ->
-        Arrow { strct = resolve_exp struct_map id_map strct; member = member }
+    | Exp.Dot { strct = strct; ``member`` = mbr } ->
+        Exp.Dot { strct = resolve_exp struct_map id_map strct; ``member`` = mbr }
+    | Arrow { strct = strct; ``member`` = mbr } ->
+        Arrow { strct = resolve_exp struct_map id_map strct; ``member`` = mbr }
     | (Constant _ | String _) as c -> c
 
 let resolve_optional_exp struct_map id_map =
@@ -102,7 +102,7 @@ let resolve_local_var_helper id_map name storage_class =
         if storage_class = Some Extern then
             { unique_name = name; from_current_scope = true; has_linkage = true }
         else
-            let unique_name = Unique_ids.make_named_temporary name
+            let unique_name = UniqueIds.makeNamedTemporary name
             { unique_name = unique_name; from_current_scope = true; has_linkage = false }
     let new_map = Map.add name entry id_map
     (new_map, entry.unique_name)
@@ -142,9 +142,9 @@ let rec resolve_statement struct_map id_map = function
     | Statement.If ( condition = condition; thenClause = then_clause; elseClause = else_clause ) ->
         Statement.If
             (
-                condition : resolve_exp struct_map id_map condition;
-                thenClause : resolve_statement struct_map id_map then_clause;
-                elseClause :
+                condition = resolve_exp struct_map id_map condition,
+                thenClause = resolve_statement struct_map id_map then_clause,
+                elseClause =
                     Option.map (resolve_statement struct_map id_map) else_clause
             )
     | While { condition = condition; body = body; id = id } ->
@@ -227,7 +227,7 @@ and resolve_function_declaration struct_map id_map fn =
         let new_id_map = Map.add fn.name new_entry id_map
         let inner_id_map = copy_identifier_map new_id_map
         let inner_id_map1, resolved_params =
-            resolve_params inner_id_map fn.params
+            resolve_params inner_id_map fn.``params``
         let inner_struct_map = copy_struct_map struct_map
         let resolved_body =
             Option.map (resolve_block inner_struct_map inner_id_map1) fn.body
@@ -235,7 +235,7 @@ and resolve_function_declaration struct_map id_map fn =
           {
               fn with
                   funType = resolved_type
-                  params = resolved_params
+                  ``params`` = resolved_params
                   body = resolved_body
           } )
 

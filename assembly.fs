@@ -1,4 +1,6 @@
-﻿type reg =
+﻿module Assembly
+
+type reg =
     | AX
     | BX
     | CX
