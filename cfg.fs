@@ -46,7 +46,7 @@ type node_id =
             | _ ->
                 invalidArg "obj" "Cannot compare values of different types"
 
-type 'v basic_block<'instr> = {
+type basic_block<'v, 'instr> = {
     id: node_id
     instructions: ('v * 'instr) list
     mutable preds: node_id list
@@ -54,9 +54,9 @@ type 'v basic_block<'instr> = {
     value: 'v
 }
 
-type 'v t<'instr> = {
+type t<'v, 'instr> = {
     (* store basic blocks in association list, indexed by block # *)
-    basic_blocks: (int * 'v basic_block<'instr>) list
+    basic_blocks: (int * basic_block<'v, 'instr>) list
     mutable entry_succs: node_id list
     mutable exit_preds: node_id list
     debug_label: string
@@ -191,24 +191,31 @@ let cfg_to_instructions g =
     List.collect blk_to_instrs g.basic_blocks
 
 (* working with annotations *)
+(* NOTE: Cannot use { x with ... } here because F# doesn't allow changing
+   the type parameter in a record update expression (unlike OCaml).
+   We construct new records explicitly to allow 'v to change. *)
 let initialize_annotation cfg dummy_val =
     let initialize_instruction (_, i) = (dummy_val, i)
     let initialize_block (idx, b) =
         (idx,
-         { b with
-               instructions = List.map initialize_instruction b.instructions
-               value = dummy_val })
-    { cfg with
-          basic_blocks = List.map initialize_block cfg.basic_blocks }
+         { id = b.id
+           instructions = List.map initialize_instruction b.instructions
+           preds = b.preds
+           succs = b.succs
+           value = dummy_val })
+    { basic_blocks = List.map initialize_block cfg.basic_blocks
+      entry_succs = cfg.entry_succs
+      exit_preds = cfg.exit_preds
+      debug_label = cfg.debug_label }
 
 let strip_annotations cfg = initialize_annotation cfg ()
 
 (* debugging *)
 let print_graphviz (pp_instr: System.IO.TextWriter -> 'instr -> unit)
                    (pp_val: System.IO.TextWriter -> 'v -> unit)
-                   (cfg: 'v t<'instr>) =
+                   (cfg: t<'v, 'instr>) =
     let filename =
-        Unique_ids.make_label cfg.debug_label + ".dot"
+        UniqueIds.makeLabel cfg.debug_label + ".dot"
     let path =
         if System.IO.Path.IsPathRooted(filename) then filename
         else System.IO.Path.Combine(System.IO.Directory.GetCurrentDirectory(), filename)
@@ -248,7 +255,7 @@ let print_graphviz (pp_instr: System.IO.TextWriter -> 'instr -> unit)
     let pp_edge i (out: System.IO.TextWriter) succ =
         out.Write(sprintf "block%d -> " i)
         pp_node_id out succ
-    let pp_edges (out: System.IO.TextWriter) ((lbl: int), (blk: 'a basic_block<_>)) =
+    let pp_edges (out: System.IO.TextWriter) ((lbl: int), (blk: basic_block<'a, _>)) =
         List.iter (pp_edge lbl out) blk.succs
     writer.WriteLine("digraph {")
     writer.WriteLine("  labeljust=l")
@@ -264,11 +271,9 @@ let print_graphviz (pp_instr: System.IO.TextWriter -> 'instr -> unit)
     let cmd =
         sprintf "dot -Tpng %s -o %s" filename
             (System.IO.Path.ChangeExtension(filename, ".png"))
-    if System.Diagnostics.Process.Start("bash", "-c \"" + cmd + "\"")
-           .WaitForExit(30000)
-       |> ignore
-       ; false
-    then failwith ("graphviz fail: " + cmd)
+    let proc = System.Diagnostics.Process.Start("bash", "-c \"" + cmd + "\"")
+    let finished = proc.WaitForExit(30000)
+    if not finished then failwith ("graphviz fail: " + cmd)
 
 
 module TackyCfg =
@@ -281,16 +286,16 @@ module TackyCfg =
         | _ -> Other
 
     let instructions_to_cfg debug_label instructions =
-        Cfg.instructions_to_cfg simplify debug_label instructions
+        instructions_to_cfg simplify debug_label instructions
 
-    let cfg_to_instructions g = Cfg.cfg_to_instructions g
-    let get_succs nd_id cfg = Cfg.get_succs nd_id cfg
-    let get_block_value blocknum cfg = Cfg.get_block_value blocknum cfg
-    let add_edge pred succ g = Cfg.add_edge pred succ g
-    let remove_edge pred succ g = Cfg.remove_edge pred succ g
-    let update_basic_block idx blk g = Cfg.update_basic_block idx blk g
-    let initialize_annotation cfg v = Cfg.initialize_annotation cfg v
-    let strip_annotations cfg = Cfg.strip_annotations cfg
+    let cfg_to_instructions g = cfg_to_instructions g
+    let get_succs nd_id cfg = get_succs nd_id cfg
+    let get_block_value blocknum cfg = get_block_value blocknum cfg
+    let add_edge pred succ g = add_edge pred succ g
+    let remove_edge pred succ g = remove_edge pred succ g
+    let update_basic_block idx blk g = update_basic_block idx blk g
+    let initialize_annotation cfg v = initialize_annotation cfg v
+    let strip_annotations cfg = strip_annotations cfg
 
 module AsmCfg =
     let simplify = function
@@ -301,13 +306,13 @@ module AsmCfg =
         | _ -> Other
 
     let instructions_to_cfg debug_label instructions =
-        Cfg.instructions_to_cfg simplify debug_label instructions
+        instructions_to_cfg simplify debug_label instructions
 
-    let cfg_to_instructions g = Cfg.cfg_to_instructions g
-    let get_succs nd_id cfg = Cfg.get_succs nd_id cfg
-    let get_block_value blocknum cfg = Cfg.get_block_value blocknum cfg
-    let add_edge pred succ g = Cfg.add_edge pred succ g
-    let remove_edge pred succ g = Cfg.remove_edge pred succ g
-    let update_basic_block idx blk g = Cfg.update_basic_block idx blk g
-    let initialize_annotation cfg v = Cfg.initialize_annotation cfg v
-    let strip_annotations cfg = Cfg.strip_annotations cfg
+    let cfg_to_instructions g = cfg_to_instructions g
+    let get_succs nd_id cfg = get_succs nd_id cfg
+    let get_block_value blocknum cfg = get_block_value blocknum cfg
+    let add_edge pred succ g = add_edge pred succ g
+    let remove_edge pred succ g = remove_edge pred succ g
+    let update_basic_block idx blk g = update_basic_block idx blk g
+    let initialize_annotation cfg v = initialize_annotation cfg v
+    let strip_annotations cfg = strip_annotations cfg

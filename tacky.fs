@@ -21,7 +21,7 @@ let const_compare a b =
     match (a, b) with
     | Const.ConstDouble d1, Const.ConstDouble d2 when d1 = d2 ->
         compare (System.Math.CopySign(1.0, d1)) (System.Math.CopySign(1.0, d2))
-    | _ -> Const.compare a b
+    | _ -> compare a b
 
 type tacky_val =
     | Constant of Const.t

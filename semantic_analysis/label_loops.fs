@@ -4,38 +4,25 @@ open Ast.Untyped
 
 let rec label_statement current_label = function
   | Break _ ->
-      match current_label with
-      | Some l -> Break l
-      | None -> failwith "Break outside of loop"
+      (match current_label with
+       | Some l -> Break l
+       | None -> failwith "Break outside of loop")
   | Continue _ ->
-      match current_label with
-      | Some l -> Continue l
-      | None -> failwith "Continue outside of loop"
-  | While while_loop ->
-      let new_id = UniqueIds.makeLabel "while" in
-      Statement.While
-        ( while_loop with
-            body = label_statement (Some new_id) while_loop.body
-            id = new_id )
-  | DoWhile do_loop ->
-      let new_id = UniqueIds.makeLabel "do_while" in
-      DoWhile
-        { do_loop with
-            body = label_statement (Some new_id) do_loop.body
-            id = new_id }
-  | For for_loop ->
-      let new_id = UniqueIds.makeLabel "for" in
-      Statement.For
-        { for_loop with
-            body = label_statement (Some new_id) for_loop.body
-            id = new_id }
+      (match current_label with
+       | Some l -> Continue l
+       | None -> failwith "Continue outside of loop")
+  | While(condition, body, id) ->
+      let new_id = UniqueIds.makeLabel "while"
+      Statement.While(condition = condition, body = label_statement (Some new_id) body, id = new_id)
+  | DoWhile(body, condition, id) ->
+      let new_id = UniqueIds.makeLabel "do_while"
+      DoWhile(body = label_statement (Some new_id) body, condition = condition, id = new_id)
+  | For(init, condition, post, body, id) ->
+      let new_id = UniqueIds.makeLabel "for"
+      Statement.For(init = init, condition = condition, post = post, body = label_statement (Some new_id) body, id = new_id)
   | Compound blk -> Compound (label_block current_label blk)
-  | If if_statement ->
-      If
-        { if_statement with
-            then_clause = label_statement current_label if_statement.then_clause
-            else_clause =
-              Option.map (label_statement current_label) if_statement.else_clause }
+  | If(condition, thenClause, elseClause) ->
+      If(condition = condition, thenClause = label_statement current_label thenClause, elseClause = Option.map (label_statement current_label) elseClause)
   | (Null | Return _ | Expression _) as s -> s
 
 and label_block_item current_label = function

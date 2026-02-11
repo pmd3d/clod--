@@ -1,7 +1,6 @@
 ﻿module Regalloc
 
 open Assembly
-open Utils
 
 // Bind AsmCfg
 module AsmCfg = Cfg.AsmCfg
@@ -9,7 +8,10 @@ module AsmCfg = Cfg.AsmCfg
 // Operand module mostly for type definition compat
 module Operand =
     type t = operand
-    let compare = compare_operand
+    let compare (a: operand) (b: operand) = Operators.compare a b
+
+let show_reg (r: reg) = sprintf "%A" r
+let pp_operand (out: System.IO.TextWriter) (op: operand) = out.Write(sprintf "%A" op)
 
 // F# Sets and Maps are generic, but we define aliases to match OCaml naming
 type OperandSet = Set<Operand.t>
@@ -17,12 +19,11 @@ type StringSet = Set<string>
 type StringMap<'v> = Map<string, 'v>
 type IntMap<'v> = Map<int, 'v>
 
-// Assuming Disjoint_sets is available externally, similar to OCaml
-module Disjoint = Disjoint_sets.Make(Operand)
+// DisjointSets is used directly (F# has no functors)
 
 let debug_print fmt =
-    Printf.ksprintf
-        (fun msg -> if !Settings.debug then Printf.printf "%s" msg)
+    Printf.kprintf
+        (fun msg -> if !Settings.debug then printf "%s" msg)
         fmt
 
 // extract all operands from an instruction.
@@ -87,6 +88,15 @@ let fold_left_map f acc xs =
     let (results, finalState) = List.mapFold f_swapped acc xs
     (finalState, results)
 
+// Node type for the interference graph
+type AllocNode = {
+    id : Assembly.operand
+    mutable neighbors : OperandSet
+    spill_cost : float
+    color : int option
+    pruned : bool
+}
+
 // The Allocator Functor converted to a Class
 type Allocator(R : RegTypeOps) =
     
@@ -120,7 +130,7 @@ type Allocator(R : RegTypeOps) =
                 (* function call updates caller-saved regs, uses param-passing
                      registers *)
                 let used =
-                    Assembly_symbols.param_regs_used f
+                    AssemblySymbols.param_regs_used f
                     |> List.filter (fun r -> List.contains r R.all_hardregs)
                     |> List.map (fun r -> Reg r)
                 in
@@ -139,7 +149,7 @@ type Allocator(R : RegTypeOps) =
             match opr with
             | Pseudo _ | Reg _ -> [ opr ]
             | Memory (r, _) -> [ Reg r ]
-            | Indexed x -> [ Reg x.base; Reg x.index ]
+            | Indexed x -> [ Reg x.``base``; Reg x.index ]
             | Imm _ | Data _ | PseudoMem _ -> []
         in
         let regs_read1 = List.collect regs_used_to_read ops_used in
@@ -150,7 +160,7 @@ type Allocator(R : RegTypeOps) =
             match opr with
             | Pseudo _ | Reg _ -> ([], [ opr ])
             | Memory (r, _) -> ([ Reg r ], [])
-            | Indexed x -> ([ Reg x.base; Reg x.index ], [])
+            | Indexed x -> ([ Reg x.``base``; Reg x.index ], [])
             | Imm _ | Data _ | PseudoMem _ -> ([], [])
         in
         let concat_pair (a, b) = (List.concat a, List.concat b) in
@@ -192,7 +202,16 @@ type Allocator(R : RegTypeOps) =
     // We will use local record definitions or assume they are mapped to the structure below
     
     // Helper function for Liveness
-    let meet fn_name cfg block =
+    // OCaml fold_left_map: ('acc -> 'a -> 'acc * 'b) -> 'acc -> 'a list -> 'acc * 'b list
+    let fold_left_map f acc lst =
+        let rec go acc result = function
+            | [] -> (acc, List.rev result)
+            | x :: xs ->
+                let acc', y = f acc x
+                go acc' (y :: result) xs
+        go acc [] lst
+
+    let meet fn_name (cfg: Cfg.t<Set<operand>, instruction>) (block: Cfg.basic_block<Set<operand>, instruction>) =
         let live_at_exit =
             let all_return_regs =
                 AssemblySymbols.return_regs_used fn_name
@@ -204,15 +223,15 @@ type Allocator(R : RegTypeOps) =
         in
 
         let update_live live = function
-            | Entry ->
+            | Cfg.Entry ->
                 failwith "Internal error: malformed interference graph"
-            | Exit -> Set.union live live_at_exit
-            | Block n -> Set.union live (AsmCfg.get_block_value n cfg)
+            | Cfg.Exit -> Set.union live live_at_exit
+            | Cfg.Block n -> Set.union live (AsmCfg.get_block_value n cfg)
         in
         List.fold update_live Set.empty block.succs
 
-    let transfer block end_live_regs =
-        let process_instr current_live_regs (_, i) =
+    let transfer (block: Cfg.basic_block<Set<operand>, instruction>) (end_live_regs: Set<operand>) =
+        let process_instr current_live_regs ((_: Set<operand>), (i: instruction)) =
             let annotated_instr = (current_live_regs, i) in
             let new_live_regs =
                 let regs_used, regs_written = regs_used_and_written i in
@@ -226,16 +245,27 @@ type Allocator(R : RegTypeOps) =
             |> List.rev
             |> fold_left_map process_instr end_live_regs
         in
-        {
-            block with
-            instructions = List.rev annotated_reversed_instrutions;
-            value = incoming_live_regs;
-        }
+        { block with
+            instructions = List.rev annotated_reversed_instrutions
+            value = incoming_live_regs }
 
-    let analyze_liveness fn_name = 
-        // Emulating: module Iterative = Backward_dataflow.Dataflow (AsmCfg) (OperandSet)
-        // Assuming Backward_dataflow.Dataflow.analyze exists as a static function
-        Backward_dataflow.analyze pp_operand (meet fn_name) transfer
+    let analyze_liveness fn_name cfg =
+        Backward_dataflow.analyze
+            pp_operand
+            (Set.empty : Set<operand>)
+            (=)
+            Set.toList
+            (meet fn_name)
+            transfer
+            Cfg.initialize_annotation
+            Cfg.update_basic_block
+            (fun (blk: Cfg.basic_block<Set<operand>, instruction>) -> blk.value)
+            (fun (blk: Cfg.basic_block<Set<operand>, instruction>) -> blk.preds)
+            (fun (cfg: Cfg.t<Set<operand>, instruction>) -> cfg.basic_blocks)
+            (fun (cfg: Cfg.t<Set<operand>, instruction>) -> cfg.debug_label)
+            (fun lbl (cfg: Cfg.t<Set<operand>, instruction>) -> { cfg with debug_label = lbl })
+            (Cfg.print_graphviz (fun (out: System.IO.TextWriter) (i: instruction) -> out.Write(sprintf "%A" i)))
+            cfg
 
     let k = Set.count all_hardregs
 
@@ -248,11 +278,11 @@ type Allocator(R : RegTypeOps) =
             let add_node g r =
                 Map.add r
                     {
-                        AllocTypes.id = r;
-                        AllocTypes.neighbors = Set.remove r all_hardregs;
-                        AllocTypes.spill_cost = Double.PositiveInfinity;
-                        AllocTypes.color = None;
-                        AllocTypes.pruned = false;
+                        id = r;
+                        neighbors = Set.remove r all_hardregs;
+                        spill_cost = infinity;
+                        color = None;
+                        pruned = false;
                     }
                     g
             in
@@ -265,7 +295,7 @@ type Allocator(R : RegTypeOps) =
                         R.pseudo_is_current_type r
                         && not
                                 (AssemblySymbols.is_static r
-                                || StringSet.contains r aliased_pseudos)
+                                || Set.contains r aliased_pseudos)
                     then Some r
                     else None
                 | _ -> None
@@ -273,11 +303,11 @@ type Allocator(R : RegTypeOps) =
             let get_pseudos i = get_operands i |> List.choose operands_to_pseudos in
             let initialize_node pseudo =
                 {
-                    AllocTypes.id = Pseudo pseudo;
-                    AllocTypes.neighbors = Set.empty;
-                    AllocTypes.spill_cost = 0.0;
-                    AllocTypes.color = None;
-                    AllocTypes.pruned = false;
+                    id = Pseudo pseudo;
+                    neighbors = Set.empty;
+                    spill_cost = 0.0;
+                    color = None;
+                    pruned = false;
                 }
             in
             List.collect get_pseudos instructions
@@ -287,7 +317,7 @@ type Allocator(R : RegTypeOps) =
 
         let add_pseudo_nodes aliased_pseudos graph instructions =
             let nds = get_pseudo_nodes aliased_pseudos instructions in
-            let add_node g (nd : AllocTypes.node) = Map.add nd.id nd g in
+            let add_node g (nd : AllocNode) = Map.add nd.id nd g in
             List.fold add_node graph nds
 
         let get_node_by_id graph node_id = Map.find node_id graph
@@ -311,7 +341,7 @@ type Allocator(R : RegTypeOps) =
             let nd1 = Map.find nd_id1 g
             Set.contains nd_id2 nd1.neighbors
 
-        let add_edges liveness_cfg interference_graph =
+        let add_edges (liveness_cfg: Cfg.t<Set<operand>, instruction>) interference_graph =
             let handle_instr (live_after_instr, i) =
                 let _, updated_regs = regs_used_and_written i in
 
@@ -333,9 +363,8 @@ type Allocator(R : RegTypeOps) =
             in
 
             let all_instructions =
-                let open AsmCfg in
                 List.collect
-                    (fun (_, blk) -> blk.instructions)
+                    (fun (_, (blk: Cfg.basic_block<Set<operand>, instruction>)) -> blk.instructions)
                     liveness_cfg.basic_blocks
             in
             List.iter handle_instr all_instructions
@@ -358,7 +387,7 @@ type Allocator(R : RegTypeOps) =
             let get_pseudo = function Assembly.Pseudo r -> Some r | _ -> None in
             let pseudos = List.choose get_pseudo operands in
             let count_map = List.fold incr_count Map.empty pseudos in
-            let set_spill_cost (nd : AllocTypes.node) =
+            let set_spill_cost (nd : AllocNode) =
                 match nd.id with
                 | Pseudo r ->
                     { nd with spill_cost = float (Map.find r count_map) }
@@ -387,7 +416,7 @@ type Allocator(R : RegTypeOps) =
                 in
                 adjusted_deg >= k
             in
-            let count_significant neighbor cnt =
+            let count_significant cnt neighbor =
                 if has_significant_degree neighbor then cnt + 1 else cnt
             in
             let significant_neighbor_count =
@@ -454,13 +483,13 @@ type Allocator(R : RegTypeOps) =
                 graph
                 |> Map.toList
                 |> List.map snd
-                |> List.filter (fun (nd: AllocTypes.node) -> not nd.pruned)
+                |> List.filter (fun (nd: AllocNode) -> not nd.pruned)
             in
             match remaining with
             | [] -> graph
             | _ ->
                 let not_pruned nd_id = not (Map.find nd_id graph).pruned in
-                let degree (nd: AllocTypes.node) =
+                let degree (nd: AllocNode) =
                     let unpruned_neighbors = Set.filter not_pruned nd.neighbors in
                     Set.count unpruned_neighbors
                 in
@@ -516,16 +545,16 @@ type Allocator(R : RegTypeOps) =
                         partly_colored
 
         let make_register_map fn_name graph =
-            let add_color nd_id (nd: AllocTypes.node) color_map =
+            let add_color color_map nd_id (nd: AllocNode) =
                 match nd_id with
                 | Reg r -> Map.add (Option.get nd.color) r color_map
                 | _ -> color_map
             in
             let colors_to_regs = Map.fold add_color Map.empty graph in
 
-            let add_mapping _k (nd: AllocTypes.node) (used_callee_saved, reg_map) =
+            let add_mapping (used_callee_saved, reg_map) _k (nd: AllocNode) =
                 match nd with
-                | { id = Pseudo p; color = Some c; _ } ->
+                | { id = Pseudo p; color = Some c } ->
                     let hardreg = Map.find c colors_to_regs in
                     let used_callee_saved =
                         if List.contains hardreg R.caller_saved_regs then used_callee_saved
@@ -537,7 +566,7 @@ type Allocator(R : RegTypeOps) =
             let callee_saved_regs_used, reg_map =
                 Map.fold add_mapping (Reg_set.empty, Map.empty) graph
             in
-            Assembly_symbols.add_callee_saved_regs_used fn_name callee_saved_regs_used
+            AssemblySymbols.add_callee_saved_regs_used fn_name callee_saved_regs_used
             reg_map
 
         let replace_pseudoregs instructions reg_map =
@@ -566,23 +595,12 @@ type Allocator(R : RegTypeOps) =
         let register_map = make_register_map fn_name colored_graph in
         replace_pseudoregs coalesced_instructions register_map
 
-// Auxiliary types for the Allocator to avoid recursive type definitions inside the class
-and AllocTypes = 
-    struct 
-         type node = {
-            id : Assembly.operand;
-            mutable neighbors : OperandSet;
-            spill_cost : float;
-            color : int option;
-            pruned : bool;
-         }
-    end
 
 let GP = new Allocator ({
     suffix = "gp"
     all_hardregs = [ AX; BX; CX; DX; DI; SI; R8; R9; R12; R13; R14; R15 ]
     caller_saved_regs = [ AX; CX; DX; DI; SI; R8; R9 ]
-    pseudo_is_current_type = fun p -> Assembly_symbols.get_type p <> Double
+    pseudo_is_current_type = fun p -> AssemblySymbols.get_type p <> Double
 })
 
 let XMM = new Allocator ({
@@ -597,7 +615,7 @@ let XMM = new Allocator ({
             XMM0; XMM1; XMM2; XMM3; XMM4; XMM5; XMM6;
             XMM7; XMM8; XMM9; XMM10; XMM11; XMM12; XMM13;
         ]
-    pseudo_is_current_type = fun p -> Assembly_symbols.get_type p = Double
+    pseudo_is_current_type = fun p -> AssemblySymbols.get_type p = Double
 })
 
 let allocate_registers aliased_pseudos (Program tls) =

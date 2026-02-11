@@ -1,6 +1,6 @@
-﻿module Typecheck
+module Typecheck
 
-open Unsigned
+open Types
 open TypeUtils
 open StringUtil
 open ListUtil
@@ -8,30 +8,31 @@ open Ast.TypedExp
 
 module U = Ast.Untyped
 module T = Ast.TypedExp
+module UE = Ast.UntypedExp
 
 let rec is_lvalue { T.e = e } =
     match e with
     | T.Dereference _ | T.Subscript _ | T.Var _ | T.String _ | T.Arrow _ -> true
-    | T.InnerExp.Dot { strct = strct } -> is_lvalue strct
+    | T.Dot(strct, _) -> is_lvalue strct
     | _ -> false
 
 let rec validate_type = function
-    | Types.Array { elem_type = elem_type } ->
-        if is_complete elem_type then validate_type elem_type
+    | Types.Array(elem_type, _) ->
+        if isComplete elem_type then validate_type elem_type
         else failwith "Array of incomplete type"
     | Types.Pointer t -> validate_type t
-    | FunType { param_types = param_types; ret_type = ret_type } ->
+    | FunType(param_types, ret_type) ->
         List.iter validate_type param_types
         validate_type ret_type
     | Char | SChar | UChar | Int | Long | UInt | ULong | Double | Void
     | Structure _ ->
         ()
 
-let validate_struct_definition { U.tag = tag; members = members } =
-    if Type_table.mem tag then failwith "Structure was already declared"
+let validate_struct_definition { U.tag = tag; U.members = members } =
+    if TypeTable.mem tag then failwith "Structure was already declared"
     else
         let member_names = ref Set.empty
-        let validate_member { U.member_name = member_name; member_type = member_type } =
+        let validate_member { U.memberName = member_name; U.memberType = member_type } =
             if Set.contains member_name !member_names then
                 failwith
                     ("Duplicate declaration of member "
@@ -44,37 +45,37 @@ let validate_struct_definition { U.tag = tag; members = members } =
             | Types.FunType _ ->
                 failwith "Can't declare structure member with function type"
             | _ ->
-                if is_complete member_type then ()
+                if isComplete member_type then ()
                 else failwith "Cannot declare structure member with incomplete type"
         List.iter validate_member members
 
-let typecheck_struct_decl ({ U.tag = tag; members = members } as sd) =
+let typecheck_struct_decl ({ U.tag = tag; U.members = members } as sd) =
     if members = [] then ()
     else
         (validate_struct_definition sd
          let build_member_def (current_size, current_alignment, current_members)
-                 { U.member_name = member_name; member_type = member_type } =
+                 { U.memberName = member_name; U.memberType = member_type } =
              let member_alignment = getAlignment member_type
              let offset =
-                 Rounding.round_away_from_zero member_alignment current_size
-             let member_entry = { Type_table.member_type = member_type; offset = offset }
-             let new_alignment = max current_alignment member_alignment
+                 Rounding.roundAwayFromZero member_alignment current_size
+             let member_entry = { TypeTable.member_type = member_type; TypeTable.offset = offset }
+             let new_alignment = Operators.max current_alignment member_alignment
              let new_size = offset + getSize member_type
              let new_members =
                  Map.add member_name member_entry current_members
              (new_size, new_alignment, new_members)
          let unpadded_size, alignment, member_defs =
              List.fold build_member_def (0, 1, Map.empty) members
-         let size = Rounding.round_away_from_zero alignment unpadded_size
-         let struct_def = { Type_table.alignment = alignment; size = size; members = member_defs }
-         Type_table.add_struct_definition tag struct_def)
+         let size = Rounding.roundAwayFromZero alignment unpadded_size
+         let struct_def = { TypeTable.alignment = alignment; TypeTable.size = size; TypeTable.members = member_defs }
+         TypeTable.add_struct_definition tag struct_def)
 
-    let cvt { U.member_name = member_name; member_type = member_type } =
-        { T.member_name = member_name; member_type = member_type }
-    { T.tag = tag; members = List.map cvt members }
+    let cvt { U.memberName = member_name; U.memberType = member_type } =
+        { Ast.Typed.memberName = member_name; Ast.Typed.memberType = member_type }
+    { Ast.Typed.tag = tag; Ast.Typed.members = List.map cvt members }
 
 let convert_to e target_type =
-    let cast = T.Cast { target_type = target_type; e = e }
+    let cast = T.Cast(target_type, e)
     setType cast target_type
 
 let get_common_type t1 t2 =
@@ -87,10 +88,10 @@ let get_common_type t1 t2 =
     else t2
 
 let is_zero_int = function
-    | Const.ConstInt i when i = Int32.zero -> true
-    | ConstLong l when l = Int64.zero -> true
-    | ConstUInt u when u = UInt32.zero -> true
-    | ConstULong ul when ul = UInt64.zero -> true
+    | Const.ConstInt i when i = 0 -> true
+    | Const.ConstLong l when l = 0L -> true
+    | Const.ConstUInt u when u = 0u -> true
+    | Const.ConstULong ul when ul = 0UL -> true
     | _ -> false
 
 let is_null_pointer_constant = function
@@ -98,24 +99,24 @@ let is_null_pointer_constant = function
     | _ -> false
 
 let get_common_pointer_type e1 e2 =
-    if e1.T.t = e2.T.t then e1.t
+    if e1.t = e2.t then e1.t
     else if is_null_pointer_constant e1.e then e2.t
     else if is_null_pointer_constant e2.e then e1.t
     else if
-        (e1.t = Pointer Void && is_pointer e2.t)
-        || (e2.t = Pointer Void && is_pointer e1.t)
+        (e1.t = Pointer Void && isPointer e2.t)
+        || (e2.t = Pointer Void && isPointer e1.t)
     then Pointer Void
     else failwith "Expressions have incompatible types"
 
 let convert_by_assignment e target_type =
-    if e.T.t = target_type then e
-    else if is_arithmetic e.t && is_arithmetic target_type then
+    if e.t = target_type then e
+    else if isArithmetic e.t && isArithmetic target_type then
         convert_to e target_type
-    else if is_null_pointer_constant e.e && is_pointer target_type then
+    else if is_null_pointer_constant e.e && isPointer target_type then
         convert_to e target_type
     else if
-        (target_type = Pointer Void && is_pointer e.t)
-        || (is_pointer target_type && e.t = Pointer Void)
+        (target_type = Pointer Void && isPointer e.t)
+        || (isPointer target_type && e.t = Pointer Void)
     then convert_to e target_type
     else failwith "Cannot convert type for asignment"
 
@@ -136,84 +137,84 @@ let opt_typecheck typecheck_fn = function
 
 let typecheck_string s =
     let e = T.String s
-    let t = Types.Array { elem_type = Char; size = String.length s + 1 }
+    let t = Types.Array(Char, String.length s + 1)
     setType e t
 
 let rec typecheck_exp = function
-    | U.Var v -> typecheck_var v
-    | Constant c -> typecheck_const c
-    | String s -> typecheck_string s
-    | Cast { target_type = target_type; e = inner } -> typecheck_cast target_type inner
-    | Unary (Not, inner) -> typecheck_not inner
-    | Unary (Complement, inner) -> typecheck_complement inner
-    | Unary (Negate, inner) -> typecheck_negate inner
-    | Binary (op, e1, e2) ->
+    | UE.Var v -> typecheck_var v
+    | UE.Constant c -> typecheck_const c
+    | UE.String s -> typecheck_string s
+    | UE.Cast(target_type, inner) -> typecheck_cast target_type inner
+    | UE.Unary (Ast.Ops.Not, inner) -> typecheck_not inner
+    | UE.Unary (Ast.Ops.Complement, inner) -> typecheck_complement inner
+    | UE.Unary (Ast.Ops.Negate, inner) -> typecheck_negate inner
+    | UE.Binary (op, e1, e2) ->
         (match op with
-         | And | Or -> typecheck_logical op e1 e2
-         | Add -> typecheck_addition e1 e2
-         | Subtract -> typecheck_subtraction e1 e2
-         | Multiply | Divide | Mod -> typecheck_multiplicative op e1 e2
-         | Equal | NotEqual -> typecheck_equality op e1 e2
-         | GreaterThan | GreaterOrEqual | LessThan | LessOrEqual ->
+         | Ast.Ops.And | Ast.Ops.Or -> typecheck_logical op e1 e2
+         | Ast.Ops.Add -> typecheck_addition e1 e2
+         | Ast.Ops.Subtract -> typecheck_subtraction e1 e2
+         | Ast.Ops.Multiply | Ast.Ops.Divide | Ast.Ops.Mod -> typecheck_multiplicative op e1 e2
+         | Ast.Ops.Equal | Ast.Ops.NotEqual -> typecheck_equality op e1 e2
+         | Ast.Ops.GreaterThan | Ast.Ops.GreaterOrEqual | Ast.Ops.LessThan | Ast.Ops.LessOrEqual ->
              typecheck_comparison op e1 e2)
-    | Assignment (lhs, rhs) -> typecheck_assignment lhs rhs
-    | Conditional { condition = condition; then_result = then_result; else_result = else_result } ->
+    | UE.Assignment (lhs, rhs) -> typecheck_assignment lhs rhs
+    | UE.Conditional(condition, then_result, else_result) ->
         typecheck_conditional condition then_result else_result
-    | FunCall { f = f; args = args } -> typecheck_fun_call f args
-    | Dereference inner -> typecheck_dereference inner
-    | AddrOf inner -> typecheck_addr_of inner
-    | Subscript { ptr = ptr; index = index } -> typecheck_subscript ptr index
-    | SizeOfT t -> typecheck_size_of_t t
-    | SizeOf e -> typecheck_size_of e
-    | Dot { strct = strct; member = member } -> typecheck_dot_operator strct member
-    | Arrow { strct = strct; member = member } -> typecheck_arrow_operator strct member
+    | UE.FunCall(f, args) -> typecheck_fun_call f args
+    | UE.Dereference inner -> typecheck_dereference inner
+    | UE.AddrOf inner -> typecheck_addr_of inner
+    | UE.Subscript(ptr, index) -> typecheck_subscript ptr index
+    | UE.SizeOfT t -> typecheck_size_of_t t
+    | UE.SizeOf e -> typecheck_size_of e
+    | UE.Dot(strct, ``member``) -> typecheck_dot_operator strct ``member``
+    | UE.Arrow(strct, ``member``) -> typecheck_arrow_operator strct ``member``
 
 and typecheck_cast target_type inner =
     validate_type target_type
     let typed_inner = typecheck_and_convert inner
-    match (target_type, typed_inner.T.t) with
+    match (target_type, typed_inner.t) with
     | Types.Double, Types.Pointer _ | Pointer _, Double ->
         failwith "Cannot cast between pointer and double"
     | Void, _ ->
-        let cast_exp = T.Cast { target_type = Void; e = typed_inner }
+        let cast_exp = T.Cast(Void, typed_inner)
         setType cast_exp Void
     | _ ->
         if not (isScalar target_type) then
             failwith "Can only cast to scalar types or void"
-        else if not (isScalar typed_inner.T.t) then
+        else if not (isScalar typed_inner.t) then
             failwith "Can only cast scalar expressions to non-void type"
         else
-            let cast_exp = T.Cast { target_type = target_type; e = typed_inner }
+            let cast_exp = T.Cast(target_type, typed_inner)
             setType cast_exp target_type
 
 and typecheck_scalar e =
     let typed_e = typecheck_and_convert e
-    if is_scalar typed_e.t then typed_e
+    if isScalar typed_e.t then typed_e
     else failwith "A scalar operand is required"
 
 and typecheck_not inner =
     let typed_inner = typecheck_scalar inner
-    let not_exp = T.Unary (Not, typed_inner)
+    let not_exp = T.Unary (Ast.Ops.Not, typed_inner)
     setType not_exp Int
 
 and typecheck_complement inner =
     let typed_inner = typecheck_and_convert inner
-    if not (is_integer typed_inner.t) then
+    if not (isInteger typed_inner.t) then
         failwith "Bitwise complement only valid for integer types"
     else
         let typed_inner =
-            if is_character typed_inner.t then convert_to typed_inner Int
+            if isCharacter typed_inner.t then convert_to typed_inner Int
             else typed_inner
-        let complement_exp = T.Unary (Complement, typed_inner)
+        let complement_exp = T.Unary (Ast.Ops.Complement, typed_inner)
         setType complement_exp typed_inner.t
 
 and typecheck_negate inner =
     let typed_inner = typecheck_and_convert inner
-    if is_arithmetic typed_inner.t then
+    if isArithmetic typed_inner.t then
         let typed_inner =
-            if is_character typed_inner.t then convert_to typed_inner Int
+            if isCharacter typed_inner.t then convert_to typed_inner Int
             else typed_inner
-        let negate_exp = T.Unary (Negate, typed_inner)
+        let negate_exp = T.Unary (Ast.Ops.Negate, typed_inner)
         setType negate_exp typed_inner.t
     else failwith "Can only negate arithmetic types"
 
@@ -226,65 +227,65 @@ and typecheck_logical op e1 e2 =
 and typecheck_addition e1 e2 =
     let typed_e1 = typecheck_and_convert e1
     let typed_e2 = typecheck_and_convert e2
-    if is_arithmetic typed_e1.t && is_arithmetic typed_e2.t then
+    if isArithmetic typed_e1.t && isArithmetic typed_e2.t then
         let common_type = get_common_type typed_e1.t typed_e2.t
         let converted_e1 = convert_to typed_e1 common_type
         let converted_e2 = convert_to typed_e2 common_type
-        let add_exp = T.Binary (Add, converted_e1, converted_e2)
+        let add_exp = T.Binary (Ast.Ops.Add, converted_e1, converted_e2)
         setType add_exp common_type
-    else if is_complete_pointer typed_e1.t && is_integer typed_e2.t then
+    else if isCompletePointer typed_e1.t && isInteger typed_e2.t then
         let converted_e2 = convert_to typed_e2 Types.Long
-        let add_exp = T.Binary (Add, typed_e1, converted_e2)
+        let add_exp = T.Binary (Ast.Ops.Add, typed_e1, converted_e2)
         setType add_exp typed_e1.t
-    else if is_complete_pointer typed_e2.t && is_integer typed_e1.t then
+    else if isCompletePointer typed_e2.t && isInteger typed_e1.t then
         let converted_e1 = convert_to typed_e1 Types.Long
-        let add_exp = T.Binary (Add, converted_e1, typed_e2)
+        let add_exp = T.Binary (Ast.Ops.Add, converted_e1, typed_e2)
         setType add_exp typed_e2.t
     else failwith "invalid operands for addition"
 
 and typecheck_subtraction e1 e2 =
     let typed_e1 = typecheck_and_convert e1
     let typed_e2 = typecheck_and_convert e2
-    if is_arithmetic typed_e1.t && is_arithmetic typed_e2.t then
+    if isArithmetic typed_e1.t && isArithmetic typed_e2.t then
         let common_type = get_common_type typed_e1.t typed_e2.t
         let converted_e1 = convert_to typed_e1 common_type
         let converted_e2 = convert_to typed_e2 common_type
-        let sub_exp = T.Binary (Subtract, converted_e1, converted_e2)
+        let sub_exp = T.Binary (Ast.Ops.Subtract, converted_e1, converted_e2)
         setType sub_exp common_type
-    else if is_complete_pointer typed_e1.t && is_integer typed_e2.t then
+    else if isCompletePointer typed_e1.t && isInteger typed_e2.t then
         let converted_e2 = convert_to typed_e2 Types.Long
-        let sub_exp = T.Binary (Subtract, typed_e1, converted_e2)
+        let sub_exp = T.Binary (Ast.Ops.Subtract, typed_e1, converted_e2)
         setType sub_exp typed_e1.t
-    else if is_complete_pointer typed_e1.t && typed_e1.t = typed_e2.t then
-        let sub_exp = T.Binary (Subtract, typed_e1, typed_e2)
+    else if isCompletePointer typed_e1.t && typed_e1.t = typed_e2.t then
+        let sub_exp = T.Binary (Ast.Ops.Subtract, typed_e1, typed_e2)
         setType sub_exp Types.Long
     else failwith "Invalid operands for subtraction"
 
 and typecheck_multiplicative op e1 e2 =
     let typed_e1 = typecheck_and_convert e1
     let typed_e2 = typecheck_and_convert e2
-    if is_arithmetic typed_e1.t && is_arithmetic typed_e2.t then
+    if isArithmetic typed_e1.t && isArithmetic typed_e2.t then
         let common_type = get_common_type typed_e1.t typed_e2.t
         let converted_e1 = convert_to typed_e1 common_type
         let converted_e2 = convert_to typed_e2 common_type
         let binary_exp = T.Binary (op, converted_e1, converted_e2)
         match op with
-        | Mod when common_type = Double -> failwith "Can't apply % to double"
-        | Multiply | Divide | Mod -> setType binary_exp common_type
+        | Ast.Ops.Mod when common_type = Double -> failwith "Can't apply % to double"
+        | Ast.Ops.Multiply | Ast.Ops.Divide | Ast.Ops.Mod -> setType binary_exp common_type
         | _ ->
             failwith
                 ("Internal error: "
-                 + T.show_binary_operator op
-                 + "isn't a multiplicative operator")
+                 + sprintf "%A" op
+                 + " isn't a multiplicative operator")
     else failwith "Can only multiply arithmetic types"
 
 and typecheck_equality op e1 e2 =
     let typed_e1 = typecheck_and_convert e1
     let typed_e2 = typecheck_and_convert e2
     let common_type =
-        if is_pointer typed_e1.t || is_pointer typed_e2.t then
+        if isPointer typed_e1.t || isPointer typed_e2.t then
             get_common_pointer_type typed_e1 typed_e2
-        else if is_arithmetic typed_e1.t && is_arithmetic typed_e2.t then
+        else if isArithmetic typed_e1.t && isArithmetic typed_e2.t then
             get_common_type typed_e1.t typed_e2.t
         else failwith "Invalid operands for equality"
     let converted_e1 = convert_to typed_e1 common_type
@@ -330,25 +331,20 @@ and typecheck_conditional condition then_exp else_exp =
     let converted_then = convert_to typed_then result_type
     let converted_else = convert_to typed_else result_type
     let conditional_exp =
-        T.Conditional
-            {
-                condition = typed_conditon
-                then_result = converted_then
-                else_result = converted_else
-            }
+        T.Conditional(typed_conditon, converted_then, converted_else)
     setType conditional_exp result_type
 
 and typecheck_fun_call f args =
     let f_type = (Symbols.get f).t
     match f_type with
-    | FunType { param_types = param_types; ret_type = ret_type } ->
+    | FunType(param_types, ret_type) ->
         if List.length param_types <> List.length args then
             failwith "Function called with wrong number of arguments"
         else ()
         let process_arg arg param_t =
             convert_by_assignment (typecheck_and_convert arg) param_t
         let converted_args = List.map2 process_arg args param_types
-        let call_exp = T.FunCall { f = f; args = converted_args }
+        let call_exp = T.FunCall(f, converted_args)
         setType call_exp ret_type
     | _ -> failwith "Tried to use variable as function name"
 
@@ -383,7 +379,7 @@ and typecheck_subscript e1 e2 =
         | Pointer referenced -> referenced
         | _ -> failwith "Internal error typechecking subscript"
     let subscript_exp =
-        T.Subscript { ptr = converted_e1; index = converted_e2 }
+        T.Subscript(converted_e1, converted_e2)
     setType subscript_exp result_type
 
 and typecheck_size_of_t t =
@@ -403,78 +399,78 @@ and typecheck_size_of inner =
 and typecheck_and_convert e =
     let typed_e = typecheck_exp e
     match typed_e.t with
-    | Types.Structure _ when not (is_complete typed_e.t) ->
+    | Types.Structure _ when not (isComplete typed_e.t) ->
         failwith "Incomplete structure type not permitted here"
-    | Types.Array { elem_type = elem_type } ->
+    | Types.Array(elem_type, _) ->
         let addr_exp = T.AddrOf typed_e
-        set_type addr_exp (Pointer elem_type)
+        setType addr_exp (Pointer elem_type)
     | _ -> typed_e
 
-and typecheck_dot_operator strct member =
+and typecheck_dot_operator strct ``member`` =
     let typed_strct = typecheck_and_convert strct
     match typed_strct.t with
     | Types.Structure tag ->
-        let struct_def = Type_table.find tag
+        let struct_def = TypeTable.find tag
         let member_typ =
-            match Map.tryFind member struct_def.members with
+            match Map.tryFind ``member`` struct_def.members with
             | Some entry -> entry.member_type
             | None ->
-                failwith ("Struct type " + tag + " has no member " + member)
-        let dot_exp = T.Dot { strct = typed_strct; member = member }
-        set_type dot_exp member_typ
+                failwith ("Struct type " + tag + " has no member " + ``member``)
+        let dot_exp = T.Dot(typed_strct, ``member``)
+        setType dot_exp member_typ
     | _ ->
         failwith
             "Dot operator can only be applied to expressions with structure type"
 
-and typecheck_arrow_operator strct_ptr member =
+and typecheck_arrow_operator strct_ptr ``member`` =
     let typed_strct_ptr = typecheck_and_convert strct_ptr
     match typed_strct_ptr.t with
     | Types.Pointer (Structure tag) ->
-        let struct_def = Type_table.find tag
+        let struct_def = TypeTable.find tag
         let member_typ =
-            match Map.tryFind member struct_def.members with
+            match Map.tryFind ``member`` struct_def.members with
             | Some entry -> entry.member_type
             | None ->
                 failwith
-                    ("Struct type " + tag + " is incomplete or has no member " + member)
-        let arrow_exp = T.Arrow { strct = typed_strct_ptr; member = member }
-        set_type arrow_exp member_typ
+                    ("Struct type " + tag + " is incomplete or has no member " + ``member``)
+        let arrow_exp = T.Arrow(typed_strct_ptr, ``member``)
+        setType arrow_exp member_typ
     | _ -> failwith "Arrow operator can only be applied to pointers to structure"
 
 let rec static_init_helper var_type init =
     match (var_type, init) with
-    | Types.Array { elem_type = elem_type; size = size }, U.SingleInit (U.String s) ->
-        if is_character elem_type then
+    | Types.Array(elem_type, size), UE.SingleInit (UE.String s) ->
+        if isCharacter elem_type then
             (match size - String.length s with
              | 0 -> [ Initializers.StringInit (s, false) ]
              | 1 -> [ Initializers.StringInit (s, true) ]
              | n when n > 0 ->
-                 [ Initializers.StringInit (s, true); ZeroInit (n - 1) ]
+                 [ Initializers.StringInit (s, true); Initializers.ZeroInit (n - 1) ]
              | _ -> failwith "string is too long for initializer")
         else
             failwith
                 "Can't initialize array of non-character type with string literal"
-    | Types.Array _, U.SingleInit _ ->
+    | Types.Array _, UE.SingleInit _ ->
         failwith "Can't initialize array from scalar value"
-    | Types.Pointer Char, U.SingleInit (U.String s) ->
+    | Types.Pointer Char, UE.SingleInit (UE.String s) ->
         let str_id = Symbols.add_string s
-        [ PointerInit str_id ]
-    | _, U.SingleInit (U.String _) ->
+        [ Initializers.PointerInit str_id ]
+    | _, UE.SingleInit (UE.String _) ->
         failwith "String literal can only initialize char *"
-    | Structure tag, U.CompoundInit inits ->
-        let struct_def = Type_table.find tag
-        let members = Type_table.get_members tag
+    | Structure tag, UE.CompoundInit inits ->
+        let struct_def = TypeTable.find tag
+        let members = TypeTable.get_members tag
         if List.length inits > List.length members then
             failwith "Too many elements in struct initializer"
         else
-            let handle_member (current_offset, current_inits) memb init =
+            let handle_member (current_offset, current_inits) (memb: TypeTable.member_entry) init =
                 let padding =
-                    if current_offset < memb.Type_table.offset then
+                    if current_offset < memb.offset then
                         [ Initializers.ZeroInit (memb.offset - current_offset) ]
                     else []
                 let more_static_inits = static_init_helper memb.member_type init
                 let new_inits = current_inits @ padding @ more_static_inits
-                let new_offset = memb.offset + get_size memb.member_type
+                let new_offset = memb.offset + getSize memb.member_type
                 (new_offset, new_inits)
             let initialized_members = ListUtil.take (List.length inits) members
             let initialized_size, explicit_initializers =
@@ -484,39 +480,39 @@ let rec static_init_helper var_type init =
                     [ Initializers.ZeroInit (struct_def.size - initialized_size) ]
                 else []
             explicit_initializers @ trailing_padding
-    | Structure _, SingleInit _ ->
+    | Structure _, UE.SingleInit _ ->
         failwith " Can't initialize static structure with scalar value"
-    | _, U.SingleInit (U.Constant c) when is_zero_int c ->
+    | _, UE.SingleInit (UE.Constant c) when is_zero_int c ->
         Initializers.zero var_type
     | Types.Pointer _, _ -> failwith "invalid static initializer for pointer"
-    | _, U.SingleInit (U.Constant c) ->
-        if is_arithmetic var_type then
+    | _, UE.SingleInit (UE.Constant c) ->
+        if isArithmetic var_type then
             let init_val =
-                match Const_convert.const_convert var_type c with
+                match ConstConvert.const_convert var_type c with
                 | Const.ConstChar c -> Initializers.CharInit c
                 | Const.ConstInt i -> Initializers.IntInit i
                 | Const.ConstLong l -> Initializers.LongInit l
                 | Const.ConstUChar uc -> Initializers.UCharInit uc
-                | Const.ConstUInt ui -> UIntInit ui
-                | Const.ConstULong ul -> ULongInit ul
-                | Const.ConstDouble d -> DoubleInit d
+                | Const.ConstUInt ui -> Initializers.UIntInit ui
+                | Const.ConstULong ul -> Initializers.ULongInit ul
+                | Const.ConstDouble d -> Initializers.DoubleInit d
             [ init_val ]
         else
             failwith
                 ("Internal error: should have already rejected initializer with type "
                  + Types.show var_type)
-    | _, U.SingleInit _ -> failwith "non-constant initializer"
-    | Array { elem_type = elem_type; size = size }, U.CompoundInit inits ->
+    | _, UE.SingleInit _ -> failwith "non-constant initializer"
+    | Array(elem_type, size), UE.CompoundInit inits ->
         let static_inits = List.collect (static_init_helper elem_type) inits
         let padding =
             match size - List.length inits with
             | 0 -> []
             | n when n > 0 ->
-                let zero_bytes = get_size elem_type * n
+                let zero_bytes = getSize elem_type * n
                 [ Initializers.ZeroInit zero_bytes ]
             | _ -> failwith "Too many values in static initializer"
         static_inits @ padding
-    | _, U.CompoundInit _ ->
+    | _, UE.CompoundInit _ ->
         failwith "Can't use compound initializer for object with scalar type"
 
 let to_static_init var_type init =
@@ -526,19 +522,19 @@ let to_static_init var_type init =
 let rec make_zero_init t =
     let scalar c = T.SingleInit { e = Constant c; t = t }
     match t with
-    | Types.Array { elem_type = elem_type; size = size } ->
-        T.CompoundInit (t, ListUtil.make_list size (make_zero_init elem_type))
+    | Types.Array(elem_type, size) ->
+        T.CompoundInit (t, ListUtil.makeList size (make_zero_init elem_type))
     | Structure tag ->
-        let members = Type_table.get_members tag
+        let members = TypeTable.get_members tag
         T.CompoundInit
-            (t, List.map (fun m -> make_zero_init m.Type_table.member_type) members)
-    | Char | SChar -> scalar (Const.ConstChar Int8.zero)
-    | Int -> scalar (Const.ConstInt Int32.zero)
-    | UChar -> scalar (Const.ConstUChar UInt8.zero)
-    | UInt -> scalar (Const.ConstUInt UInt32.zero)
-    | Long -> scalar (Const.ConstLong Int64.zero)
-    | ULong | Pointer _ -> scalar (Const.ConstULong UInt64.zero)
-    | Double -> scalar (Const.ConstDouble Float.zero)
+            (t, List.map (fun (m: TypeTable.member_entry) -> make_zero_init m.member_type) members)
+    | Char | SChar -> scalar (Const.ConstChar 0y)
+    | Int -> scalar (Const.ConstInt 0)
+    | UChar -> scalar (Const.ConstUChar 0uy)
+    | UInt -> scalar (Const.ConstUInt 0u)
+    | Long -> scalar (Const.ConstLong 0L)
+    | ULong | Pointer _ -> scalar (Const.ConstULong 0UL)
+    | Double -> scalar (Const.ConstDouble 0.0)
     | (FunType _ | Void) as t ->
         failwith
             ("Internal error: can't create zero initializer with type"
@@ -546,108 +542,111 @@ let rec make_zero_init t =
 
 let rec typecheck_init target_type init =
     match (target_type, init) with
-    | Types.Array { elem_type = elem_type; size = size }, U.SingleInit (String s) ->
-        if not (is_character elem_type) then
+    | Types.Array(elem_type, size), UE.SingleInit (UE.String s) ->
+        if not (isCharacter elem_type) then
             failwith "Can't initialize non-character type with string literal"
         else if String.length s > size then
             failwith "Too many characters in string literal"
-        else T.SingleInit (set_type (T.String s) target_type)
-    | Types.Structure tag, CompoundInit init_list ->
-        let members = Type_table.get_members tag
+        else T.SingleInit (setType (T.String s) target_type)
+    | Types.Structure tag, UE.CompoundInit init_list ->
+        let members = TypeTable.get_members tag
         if List.length init_list > List.length members then
             failwith "Too many elements in structure initializer"
         else
             let initialized_members, uninitialized_members =
-                ListUtil.take_drop (List.length init_list) members
+                ListUtil.takeDrop (List.length init_list) members
             let typechecked_members =
                 List.map2
-                    (fun memb init -> typecheck_init memb.Type_table.member_type init)
+                    (fun (memb: TypeTable.member_entry) init -> typecheck_init memb.member_type init)
                     initialized_members init_list
             let padding =
                 List.map
-                    (fun m -> make_zero_init m.Type_table.member_type)
+                    (fun (m: TypeTable.member_entry) -> make_zero_init m.member_type)
                     uninitialized_members
             T.CompoundInit (target_type, typechecked_members @ padding)
-    | _, U.SingleInit e ->
+    | _, UE.SingleInit e ->
         let typechecked_e = typecheck_and_convert e
         let cast_exp = convert_by_assignment typechecked_e target_type
         T.SingleInit cast_exp
-    | Array { elem_type = elem_type; size = size }, CompoundInit inits ->
+    | Array(elem_type, size), UE.CompoundInit inits ->
         if List.length inits > size then
             failwith "too many values in initializer "
         else
             let typechecked_inits = List.map (typecheck_init elem_type) inits
             let padding =
-                ListUtil.make_list
+                ListUtil.makeList
                     (size - List.length inits)
                     (make_zero_init elem_type)
             T.CompoundInit (target_type, typechecked_inits @ padding)
     | _ -> failwith "Can't initializer scalar value from compound initializer"
 
 let rec typecheck_block ret_type (U.Block b) =
-    T.Block (List.map (typecheck_block_item ret_type) b)
+    Ast.Typed.Block (List.map (typecheck_block_item ret_type) b)
 
 and typecheck_block_item ret_type = function
-    | S s -> S (typecheck_statement ret_type s)
-    | D d -> D (typecheck_local_decl d)
+    | U.S s -> Ast.Typed.S (typecheck_statement ret_type s)
+    | U.D d -> Ast.Typed.D (typecheck_local_decl d)
 
 and typecheck_statement ret_type = function
-    | Return (Some e) ->
+    | U.Return (Some e) ->
         if ret_type = Types.Void then
             failwith "function with void return type cannot return a value"
         else
             let typed_e =
                 convert_by_assignment (typecheck_and_convert e) ret_type
-            Return (Some typed_e)
-    | Return None ->
-        if ret_type = Void then Return None
+            Ast.Typed.Return (Some typed_e)
+    | U.Return None ->
+        if ret_type = Void then Ast.Typed.Return None
         else failwith "Function with non-void return type must return a value"
-    | Expression e -> Expression (typecheck_and_convert e)
-    | If { condition = condition; then_clause = then_clause; else_clause = else_clause } ->
-        If
-            {
-                condition = typecheck_scalar condition
-                then_clause = typecheck_statement ret_type then_clause
-                else_clause = Option.map (typecheck_statement ret_type) else_clause
-            }
-    | Compound block -> Compound (typecheck_block ret_type block)
-    | While { condition = condition; body = body; id = id } ->
-        While
-            {
-                condition = typecheck_scalar condition
-                body = typecheck_statement ret_type body
-                id = id
-            }
-    | DoWhile { body = body; condition = condition; id = id } ->
-        DoWhile
-            {
-                body = typecheck_statement ret_type body
-                condition = typecheck_scalar condition
-                id = id
-            }
-    | For { init = init; condition = condition; post = post; body = body; id = id } ->
+    | U.Expression e -> Ast.Typed.Expression (typecheck_and_convert e)
+    | U.If(condition, thenClause, elseClause) ->
+        Ast.Typed.If(
+            typecheck_scalar condition,
+            typecheck_statement ret_type thenClause,
+            Option.map (typecheck_statement ret_type) elseClause
+        )
+    | U.Compound block -> Ast.Typed.Compound (typecheck_block ret_type block)
+    | U.While(condition, body, id) ->
+        Ast.Typed.While(
+            typecheck_scalar condition,
+            typecheck_statement ret_type body,
+            id
+        )
+    | U.DoWhile(body, condition, id) ->
+        Ast.Typed.DoWhile(
+            typecheck_statement ret_type body,
+            typecheck_scalar condition,
+            id
+        )
+    | U.For(init, condition, post, body, id) ->
         let typechecked_for_init =
             match init with
-            | InitDecl { storage_class = Some _ } ->
+            | U.InitDecl { U.storageClass = Some _ } ->
                 failwith
                     "Storage class not permitted on declaration in for loop header"
-            | InitDecl d -> T.InitDecl (typecheck_local_var_decl d)
-            | InitExp e -> InitExp (opt_typecheck typecheck_and_convert e)
-        For
-            {
-                init = typechecked_for_init
-                condition = opt_typecheck typecheck_scalar condition
-                post = opt_typecheck typecheck_and_convert post
-                body = typecheck_statement ret_type body
-                id = id
-            }
-    | U.Null -> T.Null
-    | U.Break s -> T.Break s
-    | U.Continue s -> T.Continue s
+            | U.InitDecl d -> Ast.Typed.InitDecl (typecheck_local_var_decl d)
+            | U.InitExp e -> Ast.Typed.InitExp (opt_typecheck typecheck_and_convert e)
+        Ast.Typed.For(
+            typechecked_for_init,
+            opt_typecheck typecheck_scalar condition,
+            opt_typecheck typecheck_and_convert post,
+            typecheck_statement ret_type body,
+            id
+        )
+    | U.Null -> Ast.Typed.Null
+    | U.Break s -> Ast.Typed.Break s
+    | U.Continue s -> Ast.Typed.Continue s
 
 and typecheck_local_decl = function
-    | VarDecl vd -> VarDecl (typecheck_local_var_decl vd)
-    | FunDecl fd -> FunDecl (typecheck_fn_decl fd)
-    | StructDecl sd -> StructDecl (typecheck_struct_decl sd)
+    | U.VarDecl vd -> Ast.Typed.VarDecl (typecheck_local_var_decl vd)
+    | U.FunDecl fd -> Ast.Typed.FunDecl (typecheck_fn_decl fd)
+    | U.StructDecl sd -> Ast.Typed.StructDecl (typecheck_struct_decl sd)
 
-and typecheck_local
+and typecheck_local_var_decl (vd: U.VariableDeclaration) : Ast.Typed.VariableDeclaration =
+    failwith "TODO: typecheck_local_var_decl not yet implemented"
+
+and typecheck_fn_decl (fd: U.FunctionDeclaration) : Ast.Typed.FunctionDeclaration =
+    failwith "TODO: typecheck_fn_decl not yet implemented"
+
+let typecheck (Ast.Untyped.Program decls) : Ast.Typed.T =
+    Ast.Typed.Program (List.map typecheck_local_decl decls)

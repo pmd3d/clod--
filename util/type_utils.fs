@@ -2,8 +2,8 @@
 
 open Types
 
-let getType (e: Ast.TypedExp.Expression) = e.t
-let setType e newType : Ast.Typed.Expression = { e = e; t = newType }
+let getType (e: Ast.TypedExp.Exp) = e.t
+let setType e newType : Ast.TypedExp.Exp = { e = e; t = newType }
 
 let rec getSize =
     function

@@ -33,15 +33,14 @@ let rec resolve_type struct_map = function
          | Some entry -> Structure entry.unique_tag
          | None -> failwith "specified undeclared structure type")
     | Pointer referenced_t -> Pointer (resolve_type struct_map referenced_t)
-    | Array ( elemType = elem_type; size = size ) ->
+    | Array (elem_type, size) ->
         let resolved_elem_type = resolve_type struct_map elem_type
-        Array ( elemType = resolved_elem_type; size = size )
-    | FunType ( paramTypes = param_types; retType = ret_type ) ->
+        Array (resolved_elem_type, size)
+    | FunType (param_types, ret_type) ->
         let resolved_param_types =
             List.map (resolve_type struct_map) param_types
         let resolved_ret_type = resolve_type struct_map ret_type
-        FunType
-            ( paramTypes = resolved_param_types; ret_type = resolved_ret_type )
+        FunType (resolved_param_types, resolved_ret_type)
     | t -> t
 
 let rec resolve_exp struct_map id_map = function
@@ -52,41 +51,37 @@ let rec resolve_exp struct_map id_map = function
         (match Map.tryFind v id_map with
          | Some entry -> Exp.Var entry.unique_name
          | None -> failwith (sprintf "Undeclared variable %s" v))
-    | Exp.Cast { target_type = target_type; e = e } ->
+    | Exp.Cast (target_type, e) ->
         let resolved_type = resolve_type struct_map target_type
-        Exp.Cast { target_type = resolved_type; e = resolve_exp struct_map id_map e }
-    | Exp.Unary (op, e) -> Unary (op, resolve_exp struct_map id_map e)
+        Exp.Cast (resolved_type, resolve_exp struct_map id_map e)
+    | Exp.Unary (op, e) -> Exp.Unary (op, resolve_exp struct_map id_map e)
     | Exp.Binary (op, e1, e2) ->
         Exp.Binary
             (op, resolve_exp struct_map id_map e1, resolve_exp struct_map id_map e2)
-    | Exp.Conditional { condition = condition; then_result = then_result; else_result = else_result } ->
+    | Exp.Conditional (condition, then_result, else_result) ->
         Exp.Conditional
-            {
-                condition = resolve_exp struct_map id_map condition
-                then_result = resolve_exp struct_map id_map then_result
-                else_result = resolve_exp struct_map id_map else_result
-            }
-    | Exp.FunCall { f = f; args = args } ->
+            (resolve_exp struct_map id_map condition,
+             resolve_exp struct_map id_map then_result,
+             resolve_exp struct_map id_map else_result)
+    | Exp.FunCall (f, args) ->
         (match Map.tryFind f id_map with
          | Some entry ->
-             FunCall
-                 { f = entry.unique_name; args = List.map (resolve_exp struct_map id_map) args }
+             Exp.FunCall
+                 (entry.unique_name, List.map (resolve_exp struct_map id_map) args)
          | None -> failwith "Undeclared function!")
-    | Exp.Dereference inner -> Dereference (resolve_exp struct_map id_map inner)
-    | Exp.AddrOf inner -> AddrOf (resolve_exp struct_map id_map inner)
-    | Exp.Subscript { ptr = ptr; index = index } ->
+    | Exp.Dereference inner -> Exp.Dereference (resolve_exp struct_map id_map inner)
+    | Exp.AddrOf inner -> Exp.AddrOf (resolve_exp struct_map id_map inner)
+    | Exp.Subscript (ptr, index) ->
         Exp.Subscript
-            {
-                ptr = resolve_exp struct_map id_map ptr
-                index = resolve_exp struct_map id_map index
-            }
-    | Exp.SizeOf e -> SizeOf (resolve_exp struct_map id_map e)
-    | Exp.SizeOfT t -> SizeOfT (resolve_type struct_map t)
-    | Exp.Dot { strct = strct; member = member } ->
-        Exp.Dot { strct = resolve_exp struct_map id_map strct; member = member }
-    | Arrow { strct = strct; member = member } ->
-        Arrow { strct = resolve_exp struct_map id_map strct; member = member }
-    | (Constant _ | String _) as c -> c
+            (resolve_exp struct_map id_map ptr,
+             resolve_exp struct_map id_map index)
+    | Exp.SizeOf e -> Exp.SizeOf (resolve_exp struct_map id_map e)
+    | Exp.SizeOfT t -> Exp.SizeOfT (resolve_type struct_map t)
+    | Exp.Dot (strct, mbr) ->
+        Exp.Dot (resolve_exp struct_map id_map strct, mbr)
+    | Exp.Arrow (strct, mbr) ->
+        Exp.Arrow (resolve_exp struct_map id_map strct, mbr)
+    | (Exp.Constant _ | Exp.String _) as c -> c
 
 let resolve_optional_exp struct_map id_map =
     Option.map (resolve_exp struct_map id_map)
@@ -94,15 +89,15 @@ let resolve_optional_exp struct_map id_map =
 let resolve_local_var_helper id_map name storage_class =
     (match Map.tryFind name id_map with
      | Some { from_current_scope = true; has_linkage = has_linkage } ->
-         if not (has_linkage && storage_class = Some Extern) then
+         if not (has_linkage && storage_class = Some Ast.StorageClass.Extern) then
              failwith "Duplicate variable declaration"
          else ()
      | _ -> ())
     let entry =
-        if storage_class = Some Extern then
+        if storage_class = Some Ast.StorageClass.Extern then
             { unique_name = name; from_current_scope = true; has_linkage = true }
         else
-            let unique_name = Unique_ids.make_named_temporary name
+            let unique_name = UniqueIds.makeNamedTemporary name
             { unique_name = unique_name; from_current_scope = true; has_linkage = false }
     let new_map = Map.add name entry id_map
     (new_map, entry.unique_name)
@@ -139,40 +134,31 @@ let rec resolve_statement struct_map id_map = function
         let resolved_e = Option.map (resolve_exp struct_map id_map) e
         Return resolved_e
     | Expression e -> Expression (resolve_exp struct_map id_map e)
-    | Statement.If ( condition = condition; thenClause = then_clause; elseClause = else_clause ) ->
+    | Statement.If (condition, then_clause, else_clause) ->
         Statement.If
-            (
-                condition : resolve_exp struct_map id_map condition;
-                thenClause : resolve_statement struct_map id_map then_clause;
-                elseClause :
-                    Option.map (resolve_statement struct_map id_map) else_clause
-            )
-    | While { condition = condition; body = body; id = id } ->
+            (resolve_exp struct_map id_map condition,
+             resolve_statement struct_map id_map then_clause,
+             Option.map (resolve_statement struct_map id_map) else_clause)
+    | While (condition, body, id) ->
         While
-            {
-                condition = resolve_exp struct_map id_map condition
-                body = resolve_statement struct_map id_map body
-                id = id
-            }
-    | DoWhile { body = body; condition = condition; id = id } ->
+            (resolve_exp struct_map id_map condition,
+             resolve_statement struct_map id_map body,
+             id)
+    | DoWhile (body, condition, id) ->
         DoWhile
-            {
-                body = resolve_statement struct_map id_map body
-                condition = resolve_exp struct_map id_map condition
-                id = id
-            }
-    | For { init = init; condition = condition; post = post; body = body; id = id } ->
+            (resolve_statement struct_map id_map body,
+             resolve_exp struct_map id_map condition,
+             id)
+    | For (init, condition, post, body, id) ->
         let id_map1 = copy_identifier_map id_map
         let struct_map1 = copy_struct_map struct_map
         let id_map2, resolved_init = resolve_for_init struct_map1 id_map1 init
         For
-            {
-                init = resolved_init
-                condition = resolve_optional_exp struct_map1 id_map2 condition
-                post = resolve_optional_exp struct_map1 id_map2 post
-                body = resolve_statement struct_map1 id_map2 body
-                id = id
-            }
+            (resolved_init,
+             resolve_optional_exp struct_map1 id_map2 condition,
+             resolve_optional_exp struct_map1 id_map2 post,
+             resolve_statement struct_map1 id_map2 body,
+             id)
     | Compound block ->
         let new_variable_map = copy_identifier_map id_map
         let new_struct_map = copy_struct_map struct_map
@@ -200,7 +186,7 @@ and resolve_local_declaration struct_map id_map = function
         ((struct_map, new_id_map), VarDecl resolved_vd)
     | FunDecl { body = Some _ } ->
         failwith "nested function definitions are not allowed"
-    | FunDecl { storageClass = Some Static } ->
+    | FunDecl { storageClass = Some Ast.StorageClass.Static } ->
         failwith "static keyword not allowed on local function declarations"
     | FunDecl fd ->
         let new_id_map, resolved_fd =
@@ -227,7 +213,7 @@ and resolve_function_declaration struct_map id_map fn =
         let new_id_map = Map.add fn.name new_entry id_map
         let inner_id_map = copy_identifier_map new_id_map
         let inner_id_map1, resolved_params =
-            resolve_params inner_id_map fn.params
+            resolve_params inner_id_map fn.``params``
         let inner_struct_map = copy_struct_map struct_map
         let resolved_body =
             Option.map (resolve_block inner_struct_map inner_id_map1) fn.body
@@ -235,7 +221,7 @@ and resolve_function_declaration struct_map id_map fn =
           {
               fn with
                   funType = resolved_type
-                  params = resolved_params
+                  ``params`` = resolved_params
                   body = resolved_body
           } )
 

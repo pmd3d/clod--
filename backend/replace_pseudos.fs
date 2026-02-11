@@ -112,7 +112,7 @@ let replace_pseudos_in_instruction state = function
     | Pop _ -> failwith "Internal error"
 
 let replace_pseudos_in_tl = function
-    | Function { name = name; global = ``global``; instructions = instructions } ->
+    | Function { name = name; ``global`` = ``global``; instructions = instructions } ->
         (* should we stick returns_on_stack in the AST or symbol table? *)
         let starting_offset =
             if AssemblySymbols.returns_on_stack name then -8 else 0
@@ -132,7 +132,7 @@ let replace_pseudos_in_tl = function
             List.mapFold map_folder init_state instructions
         
         AssemblySymbols.set_bytes_required name final_state.current_offset
-        Function { name = name; global = ``global``; instructions = fixed_instructions }
+        Function { name = name; ``global`` = ``global``; instructions = fixed_instructions }
     | static_var -> static_var
 
 let replace_pseudos (Program tls) =
