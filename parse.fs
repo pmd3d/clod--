@@ -211,9 +211,9 @@ module Private =
                     "Constant is too large to represent as an unsigned int or unsigned \
                      long")
         else if isUint && v <= (BigInteger.Pow(2I, 32) - 1I) then
-            Const.ConstUInt(UInt32.ofInt32 (int32 v))
+            Const.ConstUInt(uint32 v)
         else
-            Const.ConstULong(UInt64.ofInt64 (int64 v))
+            Const.ConstULong(uint64 v)
 
     let parseChar token =
         let unescaped = unescape token
@@ -238,12 +238,12 @@ module Private =
             match parseConst tokens with
             | Const.ConstDouble _ ->
                 raise (ParseError "Floating-point array dimensions not allowed")
-            | Const.ConstChar c -> Int8.toInt c
+            | Const.ConstChar c -> int c
             | Const.ConstInt i -> int i
             | Const.ConstLong l -> int l
-            | Const.ConstUChar uc -> UInt8.toInt uc
-            | Const.ConstUInt u -> UInt32.toInt u
-            | Const.ConstULong ul -> UInt64.toInt ul
+            | Const.ConstUChar uc -> int uc
+            | Const.ConstUInt u -> int u
+            | Const.ConstULong ul -> int ul
         expect T.CloseBracket tokens
         dim
 

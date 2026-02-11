@@ -107,7 +107,7 @@ let fixup_instruction callee_saved_regs = function
   | Lea (src, dst) when is_memory dst ->
       [ Lea (src, Reg R11); Mov (Quadword, Reg R11, dst) ]
   (* Binary operations on double require register as destination *)
-  | Binary { t = Double; dst = Reg _; _ } as i -> [ i ]
+  | Binary { t = Double; dst = Reg _ } as i -> [ i ]
   | Binary { op = op; t = Double; src = src; dst = dst } ->
       [
         Mov (Double, dst, Reg XMM15);
@@ -222,11 +222,11 @@ let emit_stack_adjustment bytes_for_locals callee_saved_count =
   Binary { op = Sub; t = Quadword; src = Imm stack_adjustment; dst = Reg SP }
 
 let fixup_tl = function
-  | Function { name = name; global = global; instructions = instructions } ->
+  | Function { name = name; ``global`` = ``global``; instructions = instructions } ->
       (* TODO bytes_required should be positive (fix this in replace_pseudos) *)
-      let stack_bytes = -AssemblySymbols.getBytesRequired name
+      let stack_bytes = -AssemblySymbols.get_bytes_required name
       let callee_saved_regs =
-        AssemblySymbols.getCalleeSavedRegsUsed name |> Set.toList
+        AssemblySymbols.get_callee_saved_regs_used name |> Set.toList
 
       let save_reg r = Push (Reg r)
       let adjust_rsp =
@@ -236,7 +236,7 @@ let fixup_tl = function
       Function
         {
           name = name;
-          global = global;
+          ``global`` = ``global``;
           instructions =
             setup_instructions
             @ List.collect (fixup_instruction callee_saved_regs) instructions;

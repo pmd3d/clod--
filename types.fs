@@ -38,3 +38,5 @@ let rec show (typ: t) : string =
             paramStr
             (show retType)
     | Structure tag -> sprintf "(Structure %s)" tag
+
+let pp (out: System.IO.TextWriter) (t: t) = out.Write(show t)

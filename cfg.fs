@@ -191,15 +191,22 @@ let cfg_to_instructions g =
     List.collect blk_to_instrs g.basic_blocks
 
 (* working with annotations *)
+(* NOTE: Cannot use { x with ... } here because F# doesn't allow changing
+   the type parameter in a record update expression (unlike OCaml).
+   We construct new records explicitly to allow 'v to change. *)
 let initialize_annotation cfg dummy_val =
     let initialize_instruction (_, i) = (dummy_val, i)
     let initialize_block (idx, b) =
         (idx,
-         { b with
-               instructions = List.map initialize_instruction b.instructions
-               value = dummy_val })
-    { cfg with
-          basic_blocks = List.map initialize_block cfg.basic_blocks }
+         { id = b.id
+           instructions = List.map initialize_instruction b.instructions
+           preds = b.preds
+           succs = b.succs
+           value = dummy_val })
+    { basic_blocks = List.map initialize_block cfg.basic_blocks
+      entry_succs = cfg.entry_succs
+      exit_preds = cfg.exit_preds
+      debug_label = cfg.debug_label }
 
 let strip_annotations cfg = initialize_annotation cfg ()
 
@@ -279,16 +286,16 @@ module TackyCfg =
         | _ -> Other
 
     let instructions_to_cfg debug_label instructions =
-        Cfg.instructions_to_cfg simplify debug_label instructions
+        instructions_to_cfg simplify debug_label instructions
 
-    let cfg_to_instructions g = Cfg.cfg_to_instructions g
-    let get_succs nd_id cfg = Cfg.get_succs nd_id cfg
-    let get_block_value blocknum cfg = Cfg.get_block_value blocknum cfg
-    let add_edge pred succ g = Cfg.add_edge pred succ g
-    let remove_edge pred succ g = Cfg.remove_edge pred succ g
-    let update_basic_block idx blk g = Cfg.update_basic_block idx blk g
-    let initialize_annotation cfg v = Cfg.initialize_annotation cfg v
-    let strip_annotations cfg = Cfg.strip_annotations cfg
+    let cfg_to_instructions g = cfg_to_instructions g
+    let get_succs nd_id cfg = get_succs nd_id cfg
+    let get_block_value blocknum cfg = get_block_value blocknum cfg
+    let add_edge pred succ g = add_edge pred succ g
+    let remove_edge pred succ g = remove_edge pred succ g
+    let update_basic_block idx blk g = update_basic_block idx blk g
+    let initialize_annotation cfg v = initialize_annotation cfg v
+    let strip_annotations cfg = strip_annotations cfg
 
 module AsmCfg =
     let simplify = function
@@ -299,13 +306,13 @@ module AsmCfg =
         | _ -> Other
 
     let instructions_to_cfg debug_label instructions =
-        Cfg.instructions_to_cfg simplify debug_label instructions
+        instructions_to_cfg simplify debug_label instructions
 
-    let cfg_to_instructions g = Cfg.cfg_to_instructions g
-    let get_succs nd_id cfg = Cfg.get_succs nd_id cfg
-    let get_block_value blocknum cfg = Cfg.get_block_value blocknum cfg
-    let add_edge pred succ g = Cfg.add_edge pred succ g
-    let remove_edge pred succ g = Cfg.remove_edge pred succ g
-    let update_basic_block idx blk g = Cfg.update_basic_block idx blk g
-    let initialize_annotation cfg v = Cfg.initialize_annotation cfg v
-    let strip_annotations cfg = Cfg.strip_annotations cfg
+    let cfg_to_instructions g = cfg_to_instructions g
+    let get_succs nd_id cfg = get_succs nd_id cfg
+    let get_block_value blocknum cfg = get_block_value blocknum cfg
+    let add_edge pred succ g = add_edge pred succ g
+    let remove_edge pred succ g = remove_edge pred succ g
+    let update_basic_block idx blk g = update_basic_block idx blk g
+    let initialize_annotation cfg v = initialize_annotation cfg v
+    let strip_annotations cfg = strip_annotations cfg

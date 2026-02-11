@@ -4,12 +4,12 @@ let compile (stage: Settings.stage) (optimizations: Settings.optimizations) (src
     // read in the file - TODO use streams?
     let source = System.IO.File.ReadAllText(src_file)
     // Lex it
-    let tokens = Lex.lex source
+    let tokens = Lexer.lex source
     if stage = Settings.Lex then ()
     else
         let ast = Parse.parse tokens
         if stage = Settings.Parse then
-            printf "%s" (Ast.Untyped.pp ast)
+            printf "%A" ast
         else
             // Semantic analysis has three steps:
             // 1. resolve identifiers
@@ -21,7 +21,7 @@ let compile (stage: Settings.stage) (optimizations: Settings.optimizations) (src
             if stage = Settings.Validate then ()
             else
                 // Convert the AST to TACKY
-                let tacky = Tacky_gen.gen typed_ast
+                let tacky = TackyGen.gen typed_ast
                 // print to file (src filename with .debug.tacky extension) if debug is
                 // enabled
                 Tacky_print.debug_print_tacky src_file tacky
@@ -46,9 +46,9 @@ let compile (stage: Settings.stage) (optimizations: Settings.optimizations) (src
                         let postalloc_filename =
                             System.IO.Path.ChangeExtension(src_file, null) + ".postalloc.debug.s"
                         Emit.emit postalloc_filename asm_ast
-                    let asm_ast2 = Replace_pseudos.replace_pseudos asm_ast1
+                    let asm_ast2 = ReplacePseudos.replace_pseudos asm_ast1
                     // fix up instructions
-                    let asm_ast3 = Instruction_fixup.fixup_program asm_ast2
+                    let asm_ast3 = InstructionFixup.fixup_program asm_ast2
                     if stage = Settings.Codegen then ()
                     else
                         let asm_filename = System.IO.Path.ChangeExtension(src_file, ".s")

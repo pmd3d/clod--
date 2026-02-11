@@ -1,5 +1,6 @@
 ﻿module TackyGen
 
+open Ast.Ops
 module Ast = Ast.Typed
 module T = Tacky
 
@@ -47,23 +48,23 @@ let get_member_pointer_offset ``member`` = function
              + " is not a pointer type")
 
 let convert_op = function
-    | Ast.Complement -> T.Complement
-    | Ast.Negate -> T.Negate
-    | Ast.Not -> T.Not
+    | Complement -> T.Complement
+    | Negate -> T.Negate
+    | Not -> T.Not
 
 let convert_binop = function
-    | Ast.Add -> T.Add
-    | Ast.Subtract -> T.Subtract
-    | Ast.Multiply -> T.Multiply
-    | Ast.Divide -> T.Divide
-    | Ast.Mod -> T.Mod
-    | Ast.Equal -> T.Equal
-    | Ast.NotEqual -> T.NotEqual
-    | Ast.LessThan -> T.LessThan
-    | Ast.LessOrEqual -> T.LessOrEqual
-    | Ast.GreaterThan -> T.GreaterThan
-    | Ast.GreaterOrEqual -> T.GreaterOrEqual
-    | Ast.And | Ast.Or ->
+    | Add -> T.Add
+    | Subtract -> T.Subtract
+    | Multiply -> T.Multiply
+    | Divide -> T.Divide
+    | Mod -> T.Mod
+    | Equal -> T.Equal
+    | NotEqual -> T.NotEqual
+    | LessThan -> T.LessThan
+    | LessOrEqual -> T.LessOrEqual
+    | GreaterThan -> T.GreaterThan
+    | GreaterOrEqual -> T.GreaterOrEqual
+    | And | Or ->
         failwith
             "Internal error, cannot convert these directly to TACKY binops"
 
@@ -84,38 +85,38 @@ let rec emit_tacky_for_exp (exp: Ast.Exp) =
     let t = exp.t
     match e with
     (* don't need any instructions to calculate a constant or variable *)
-    | Ast.Constant c -> ([], PlainOperand(T.Constant c))
-    | Ast.Var v -> ([], PlainOperand(T.Var v))
-    | Ast.String s ->
+    | Ast.InnerExp.Constant c -> ([], PlainOperand(T.Constant c))
+    | Ast.InnerExp.Var v -> ([], PlainOperand(T.Var v))
+    | Ast.InnerExp.String s ->
         let str_id = Symbols.add_string s
         ([], PlainOperand(T.Var str_id))
-    | Ast.Cast(target_type, e) ->
+    | Ast.InnerExp.Cast(target_type, e) ->
         emit_cast_expression target_type e
-    | Ast.Unary(op, inner) -> emit_unary_expression t op inner
-    | Ast.Binary(Ast.And, e1, e2) -> emit_and_expression e1 e2
-    | Ast.Binary(Ast.Or, e1, e2) -> emit_or_expression e1 e2
-    | Ast.Binary(Ast.Add, e1, e2) when TypeUtils.isPointer t ->
+    | Ast.InnerExp.Unary(op, inner) -> emit_unary_expression t op inner
+    | Ast.InnerExp.Binary(And, e1, e2) -> emit_and_expression e1 e2
+    | Ast.InnerExp.Binary(Or, e1, e2) -> emit_or_expression e1 e2
+    | Ast.InnerExp.Binary(Add, e1, e2) when TypeUtils.isPointer t ->
         emit_pointer_addition t e1 e2
-    | Ast.Binary(Ast.Subtract, ptr, index) when TypeUtils.isPointer t ->
+    | Ast.InnerExp.Binary(Subtract, ptr, index) when TypeUtils.isPointer t ->
         emit_subtraction_from_pointer t ptr index
-    | Ast.Binary(Ast.Subtract, e1, e2) when TypeUtils.isPointer e1.t ->
+    | Ast.InnerExp.Binary(Subtract, e1, e2) when TypeUtils.isPointer e1.t ->
         (* at least one operand is pointer but result isn't, must be subtracting
            one pointer from another *)
         emit_pointer_diff t e1 e2
-    | Ast.Binary(op, e1, e2) -> emit_binary_expression t op e1 e2
-    | Ast.Assignment(lhs, rhs) -> emit_assignment lhs rhs
-    | Ast.Conditional(condition, then_result, else_result) ->
+    | Ast.InnerExp.Binary(op, e1, e2) -> emit_binary_expression t op e1 e2
+    | Ast.InnerExp.Assignment(lhs, rhs) -> emit_assignment lhs rhs
+    | Ast.InnerExp.Conditional(condition, then_result, else_result) ->
         emit_conditional_expression t condition then_result else_result
-    | Ast.FunCall(f, args) -> emit_fun_call t f args
-    | Ast.Dereference inner -> emit_dereference inner
-    | Ast.AddrOf inner -> emit_addr_of t inner
-    | Ast.Subscript(ptr, index) ->
+    | Ast.InnerExp.FunCall(f, args) -> emit_fun_call t f args
+    | Ast.InnerExp.Dereference inner -> emit_dereference inner
+    | Ast.InnerExp.AddrOf inner -> emit_addr_of t inner
+    | Ast.InnerExp.Subscript(ptr, index) ->
         emit_subscript t ptr index
-    | Ast.SizeOfT st -> ([], PlainOperand(eval_size st))
-    | Ast.SizeOf inner -> ([], PlainOperand(eval_size inner.t))
-    | Ast.Dot(strct, mbr) ->
+    | Ast.InnerExp.SizeOfT st -> ([], PlainOperand(eval_size st))
+    | Ast.InnerExp.SizeOf inner -> ([], PlainOperand(eval_size inner.t))
+    | Ast.InnerExp.Dot(strct, mbr) ->
         emit_dot_operator t strct mbr
-    | Ast.Arrow(strct, mbr) ->
+    | Ast.InnerExp.Arrow(strct, mbr) ->
         emit_arrow_operator t strct mbr
 
 (* helper functions for individual expression *)
@@ -268,11 +269,11 @@ and emit_assignment lhs rhs =
     | PlainOperand o ->
         (instructions @ [ T.Copy { src = rval; dst = o } ], lval)
     | DereferencedPointer ptr ->
-        (instructions @ [ T.Store { src = rval; dst_ptr = ptr } ],
+        (instructions @ [ T.Store {| src = rval; dst_ptr = ptr |} ],
          PlainOperand rval)
-    | SubObject(base, offset) ->
+    | SubObject(``base``, offset) ->
         (instructions @ [ T.CopyToOffset { src = rval; offset = offset;
-                                           dst = base } ],
+                                           dst = ``base`` } ],
          PlainOperand rval)
 
 and emit_conditional_expression t condition e1 e2 =
@@ -318,14 +319,14 @@ and emit_dereference inner =
     let instructions, result = emit_tacky_and_convert inner
     (instructions, DereferencedPointer result)
 
-and emit_dot_operator t strct mbr =
+and emit_dot_operator t (strct: Ast.Exp) mbr =
     let member_offset = get_member_offset mbr strct.t
     let instructions, inner_object = emit_tacky_for_exp strct
     match inner_object with
     | PlainOperand(T.Var v) ->
         (instructions, SubObject(v, member_offset))
-    | SubObject(base, offset) ->
-        (instructions, SubObject(base, offset + member_offset))
+    | SubObject(``base``, offset) ->
+        (instructions, SubObject(``base``, offset + member_offset))
     | DereferencedPointer ptr ->
         if member_offset = 0 then (instructions, DereferencedPointer ptr)
         else
@@ -338,7 +339,7 @@ and emit_dot_operator t strct mbr =
         failwith
             "Internal error: found dot operator applied to constant"
 
-and emit_arrow_operator t strct mbr =
+and emit_arrow_operator t (strct: Ast.Exp) mbr =
     let member_offset = get_member_pointer_offset mbr strct.t
     let instructions, ptr = emit_tacky_and_convert strct
     if member_offset = 0 then (instructions, DereferencedPointer ptr)
@@ -357,9 +358,9 @@ and emit_addr_of t inner =
         (instructions @ [ T.GetAddress { src = o; dst = dst } ],
          PlainOperand dst)
     | DereferencedPointer ptr -> (instructions, PlainOperand ptr)
-    | SubObject(base, offset) ->
+    | SubObject(``base``, offset) ->
         let dst = T.Var(create_tmp t)
-        let get_addr = T.GetAddress { src = T.Var base; dst = dst }
+        let get_addr = T.GetAddress { src = T.Var ``base``; dst = dst }
         if offset = 0 then
             (* skip AddPtr if offset is 0 *)
             (instructions @ [ get_addr ], PlainOperand dst)
@@ -377,11 +378,11 @@ and emit_tacky_and_convert e =
     | PlainOperand o -> (instructions, o)
     | DereferencedPointer ptr ->
         let dst = T.Var(create_tmp e.t)
-        (instructions @ [ T.Load { src_ptr = ptr; dst = dst } ], dst)
-    | SubObject(base, offset) ->
+        (instructions @ [ T.Load {| src_ptr = ptr; dst = dst |} ], dst)
+    | SubObject(``base``, offset) ->
         let dst = T.Var(create_tmp e.t)
         (instructions
-         @ [ T.CopyFromOffset { src = base; offset = offset; dst = dst } ],
+         @ [ T.CopyFromOffset { src = ``base``; offset = offset; dst = dst } ],
          dst)
 
 let rec emit_string_init dst offset (s: byte[]) =
@@ -410,27 +411,27 @@ let rec emit_string_init dst offset (s: byte[]) =
         instr :: emit_string_init dst (offset + 1) rest
 
 let rec emit_compound_init name offset = function
-    | Ast.SingleInit { e = Ast.String s; t = Types.Array(_, size) } ->
+    | Ast.Initializr.SingleInit { e = Ast.InnerExp.String s; t = Types.Array(_, size) } ->
         let str_bytes = Bytes.ofString s
         let padding_bytes = Bytes.make (size - String.length s) (char 0)
         emit_string_init name offset (Bytes.cat str_bytes padding_bytes)
-    | Ast.SingleInit e ->
+    | Ast.Initializr.SingleInit e ->
         let eval_init, v = emit_tacky_and_convert e
         eval_init
         @ [ T.CopyToOffset { src = v; dst = name; offset = offset } ]
-    | Ast.CompoundInit(Types.Array(elem_type, _), inits) ->
+    | Ast.Initializr.CompoundInit(Types.Array(elem_type, _), inits) ->
         let handle_init idx elem_init =
             let new_offset =
                 offset + (idx * TypeUtils.getSize elem_type)
             emit_compound_init name new_offset elem_init
         List.concat (List.mapi handle_init inits)
-    | Ast.CompoundInit(Types.Structure tag, inits) ->
+    | Ast.Initializr.CompoundInit(Types.Structure tag, inits) ->
         let members = TypeTable.get_members tag
-        let process_init memb init =
-            let mem_offset = offset + memb.TypeTable.offset
+        let process_init (memb: TypeTable.member_entry) init =
+            let mem_offset = offset + memb.offset
             emit_compound_init name mem_offset init
         List.concat (List.map2 process_init members inits)
-    | Ast.CompoundInit(_, _) ->
+    | Ast.Initializr.CompoundInit(_, _) ->
         failwith "Internal error: compound init has non-array type!"
 
 let rec emit_tacky_for_statement = function
@@ -469,15 +470,12 @@ and emit_local_declaration = function
     | Ast.StructDecl _ -> []
 
 and emit_var_declaration = function
-    | { name = name;
-        init =
-            Some(Ast.SingleInit { e = Ast.String _; t = Types.Array _ }
-                 as string_init) } ->
+    | { name = name; init = Some(Ast.Initializr.SingleInit({ e = Ast.InnerExp.String _; t = Types.Array _ }) as string_init) } ->
         emit_compound_init name 0 string_init
-    | { name = name; init = Some(Ast.SingleInit e); varType = varType } ->
+    | { name = name; init = Some(Ast.Initializr.SingleInit e); varType = varType } ->
         (* treat declaration with initializer like an assignment expression *)
         let eval_assignment, _assign_result =
-            emit_assignment { e = Ast.Var name; t = varType } e
+            emit_assignment { e = Ast.InnerExp.Var name; t = varType } e
         eval_assignment
     | { name = name; init = Some compound_init } ->
         emit_compound_init name 0 compound_init

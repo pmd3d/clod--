@@ -365,7 +365,7 @@ let emit_stack_note (chan: System.IO.StreamWriter) =
         chan.Write("\t.section .note.GNU-stack,\"\",@progbits\n")
 
 let emit assembly_file (Program tls) =
-    use output_channel = new System.IO.StreamWriter(assembly_file)
+    use output_channel = new System.IO.StreamWriter(assembly_file : string)
     List.iter (emit_tl output_channel) tls
     emit_stack_note output_channel
     output_channel.Flush()
