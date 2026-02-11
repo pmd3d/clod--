@@ -1,0 +1,45 @@
+﻿module Initializers
+
+type static_init =
+    | CharInit of sbyte
+    | UCharInit of byte
+    | IntInit of int32
+    | LongInit of int64
+    | UIntInit of uint32
+    | ULongInit of uint64
+    | DoubleInit of float
+    (* zero out arbitrary number of bytes *)
+    | ZeroInit of int
+    | StringInit of string * bool (* flag indicates whether the string is null terminated *)
+    | PointerInit of string (* pointer to static variable *)
+
+let show_static_init = function
+    | CharInit c -> string c
+    | UCharInit uc -> string uc
+    | IntInit i -> string i
+    | LongInit l -> string l + "l"
+    | UIntInit u -> string u + "u"
+    | ULongInit ul -> string ul + "ul"
+    | DoubleInit dbl -> string dbl
+    | ZeroInit i -> sprintf "zero[%d]" i
+    | StringInit(s, b) ->
+        "\"" + s + (if b then "\\0" else "") + "\""
+    | PointerInit s -> sprintf "&%s" s
+
+let pp_static_init (fmt: System.IO.TextWriter) si =
+    fmt.Write(show_static_init si)
+
+let zero t = [ ZeroInit(TypeUtils.getSize t) ]
+
+let is_zero = function
+    | CharInit c -> c = 0y
+    | IntInit i -> i = 0
+    | LongInit l -> l = 0L
+    | UCharInit c -> c = 0uy
+    | UIntInit u -> u = 0u
+    | ULongInit ul -> ul = 0UL
+    (* NOTE: consider all doubles non-zero since we don't know if it's zero or
+       negative zero *)
+    | DoubleInit _ -> false
+    | ZeroInit _ -> true
+    | PointerInit _ | StringInit _ -> false
