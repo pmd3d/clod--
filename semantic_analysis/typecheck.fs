@@ -643,10 +643,163 @@ and typecheck_local_decl = function
     | U.StructDecl sd -> Ast.Typed.StructDecl (typecheck_struct_decl sd)
 
 and typecheck_local_var_decl (vd: U.VariableDeclaration) : Ast.Typed.VariableDeclaration =
-    failwith "TODO: typecheck_local_var_decl not yet implemented"
-
+    if varType = Void then failwith "No void declarations"
+    else validate_type varType
+    match storageClass with
+    | Some Extern ->
+        if Option.isSome init then
+            failwith "initializer on local extern declaration"
+        else ()
+        // If an external local var is already in the symbol table, don't need
+        // to add it
+        (match Symbols.get_opt name with
+         | Some { Symbols.t = t } ->
+             if t <> varType then
+                 failwith "Variable redeclared with different type"
+             else ()
+         | None ->
+             Symbols.add_static_var name varType Symbols.NoInitializer true)
+        { Ast.Typed.name = name
+          Ast.Typed.init = None
+          Ast.Typed.storageClass = storageClass
+          Ast.Typed.varType = varType }
+    | _ when not (isComplete varType) ->
+        // can't define a variable with an incomplete type
+        failwith "Cannot define a variable with an incomplete type"
+    | Some Static ->
+        let zero_init = Symbols.Initial (Initializers.zero varType)
+        let static_init =
+            match init with
+            | Some i -> to_static_init varType i
+            | None -> zero_init
+        Symbols.add_static_var name varType static_init false
+        // NOTE: we won't actually use init in subsequent passes so we can drop it
+        { Ast.Typed.name = name
+          Ast.Typed.init = None
+          Ast.Typed.storageClass = storageClass
+          Ast.Typed.varType = varType }
+    | None ->
+        Symbols.add_automatic_var name varType
+        { Ast.Typed.name = name
+          Ast.Typed.varType = varType
+          Ast.Typed.storageClass = storageClass
+          Ast.Typed.init = opt_typecheck (typecheck_init varType) init }
 and typecheck_fn_decl (fd: U.FunctionDeclaration) : Ast.Typed.FunctionDeclaration =
-    failwith "TODO: typecheck_fn_decl not yet implemented"
+    validate_type funType
+    // Note: we do this _before_ adjusting param types
+    let adjust_param_type = function
+        | Types.Array(elem_type, _) -> Types.Pointer elem_type
+        | Void -> failwith "No void params allowed"
+        | t -> t
+    let param_ts, return_t, funType =
+        match funType with
+        | Types.FunType(_, Types.Array(_, _)) ->
+            failwith "A function cannot return an array"
+        | Types.FunType(param_types, ret_type) ->
+            let param_types = List.map adjust_param_type param_types
+            (param_types, ret_type, Types.FunType(param_types, ret_type))
+        | _ ->
+            failwith "Internal error, function has non-function type"
+    let has_body = Option.isSome body
+    // can't define a function with incomplete return or param type
+    if
+        has_body
+        && not
+             ((return_t = Void || isComplete return_t)
+              && List.forall isComplete param_ts)
+    then
+        failwith
+            "Can't define a function with incomplete return type or parameter type"
+    else
+        let ``global`` = storageClass <> Some Static
+        // helper function to reconcile current and previous declarations
+        let check_against_previous { Symbols.t = prev_t; Symbols.attrs = attrs } =
+            if prev_t <> funType then
+                failwith ("Redeclared function " + name + " with a different type")
+            else
+                match attrs with
+                | Symbols.FunAttr { ``global`` = prev_global; defined = prev_defined } ->
+                    if prev_defined && has_body then
+                        failwith ("Defined body of function " + name + "twice")
+                    else if prev_global && storageClass = Some Static then
+                        failwith "Static function declaration follows non-static"
+                    else
+                        let defined = has_body || prev_defined
+                        (defined, prev_global)
+                | _ ->
+                    failwith
+                        "Internal error: symbol has function type but not function attributes"
+        let old_decl = Symbols.get_opt name
+        let defined, ``global`` =
+            match old_decl with
+            | Some old_d -> check_against_previous old_d
+            | None -> (has_body, ``global``)
+        Symbols.add_fun name funType defined ``global``
+        if has_body then
+            List.iter2 (fun p t -> Symbols.add_automatic_var p t) params param_ts
+        else ()
+        let body = Option.map (typecheck_block return_t) body
+        { Ast.Typed.name = name
+          Ast.Typed.funType = funType
+          Ast.Typed.params = params
+          Ast.Typed.body = body
+          Ast.Typed.storageClass = storageClass }
+
+let typecheck_file_scope_var_decl
+    ({ U.name = name; U.varType = varType; U.init = init; U.storageClass = storageClass }: U.VariableDeclaration)
+    =
+    if varType = Void then failwith "void variables not allowed"
+    else validate_type varType
+    let default_init =
+        if storageClass = Some Extern then Symbols.NoInitializer else Symbols.Tentative
+    let static_init =
+        match init with
+        | Some i -> to_static_init varType i
+        | None -> default_init
+    if not (isComplete varType || static_init = Symbols.NoInitializer) then
+        // note: some compilers permit tentative definition with incomplete type, if
+        // it's completed later in the file. we don't.
+        failwith "Can't define a variable with an incomplete type "
+    else
+        let current_global = storageClass <> Some Static
+        let old_decl = Symbols.get_opt name
+        let check_against_previous { Symbols.t = t; Symbols.attrs = attrs } =
+            if t <> varType then failwith "Variable redeclared with different type"
+            else
+                match attrs with
+                | Symbols.StaticAttr { ``global`` = prev_global; init = prev_init } ->
+                    let ``global`` =
+                        if storageClass = Some Extern then prev_global
+                        else if current_global = prev_global then current_global
+                        else failwith "Conflicting variable linkage"
+                    let init =
+                        match (prev_init, static_init) with
+                        | Symbols.Initial _, Symbols.Initial _ ->
+                            failwith "Conflicting global variable definition"
+                        | Symbols.Initial _, _ -> prev_init
+                        | Symbols.Tentative, (Symbols.Tentative | Symbols.NoInitializer) -> Symbols.Tentative
+                        | _, Symbols.Initial _ | Symbols.NoInitializer, _ -> static_init
+                    (``global``, init)
+                | _ ->
+                    failwith
+                        "Internal error, file-scope variable previously declared as \
+                         local variable or function"
+        let ``global``, init =
+            match old_decl with
+            | Some old_d -> check_against_previous old_d
+            | None -> (current_global, static_init)
+        Symbols.add_static_var name varType init ``global``
+        // Okay to drop initializer b/c it's never used after this pass
+        { Ast.Typed.name = name
+          Ast.Typed.varType = varType
+          Ast.Typed.init = None
+          Ast.Typed.storageClass = storageClass }
+
+let typecheck_global_decl = function
+    | U.FunDecl fd -> Ast.Typed.FunDecl (typecheck_fn_decl fd)
+    | U.VarDecl vd -> Ast.Typed.VarDecl (typecheck_file_scope_var_decl vd)
+    | U.StructDecl sd -> Ast.Typed.StructDecl (typecheck_struct_decl sd)
 
 let typecheck (Ast.Untyped.Program decls) : Ast.Typed.T =
-    Ast.Typed.Program (List.map typecheck_local_decl decls)
+    Ast.Typed.Program (List.map typecheck_global_decl decls)
+

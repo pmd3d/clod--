@@ -23,7 +23,6 @@
     <Compile Include="initializers.fs" />
     <Compile Include="tokens.fs" />
     <Compile Include="assembly.fs" />
-    <Compile Include="codegen.fs" />
     <Compile Include="reg_set.fs" />
     <Compile Include="symbols.fs" />
     <Compile Include="tacky.fs" />
