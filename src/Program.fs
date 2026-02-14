@@ -88,31 +88,31 @@ let setOptions optimize constantFolding deadStoreElimination
 (* Command-line parsing via System.CommandLine *)
 
 (* Stage options — mutually exclusive flags, default is Executable *)
-let lexOption = Option<bool>("--lex", "Run the lexer")
-let parseOption = Option<bool>("--parse", "Run the lexer and parser")
-let validateOption = Option<bool>("--validate", "Run the lexer, parser, and semantic analysis")
-let tackyOption = Option<bool>("--tacky", "Run the lexer, parser, semantic analysis, and tacky generator")
-let codegenOption = Option<bool>("--codegen", "Run through code generation but stop before emitting assembly")
-let assemblyOption = Option<bool>("-S", "-s", "Stop before assembling (keep .s file)")
-let objOption = Option<bool>("-c", "Stop before invoking linker (keep .o file)")
+let lexOption = Option<bool>("--lex", Description = "Run the lexer")
+let parseOption = Option<bool>("--parse", Description = "Run the lexer and parser")
+let validateOption = Option<bool>("--validate", Description = "Run the lexer, parser, and semantic analysis")
+let tackyOption = Option<bool>("--tacky", Description = "Run the lexer, parser, semantic analysis, and tacky generator")
+let codegenOption = Option<bool>("--codegen", Description = "Run through code generation but stop before emitting assembly")
+let assemblyOption = Option<bool>("-S", "-s", Description = "Stop before assembling (keep .s file)")
+let objOption = Option<bool>("-c", Description = "Stop before invoking linker (keep .o file)")
 
 (* Other options *)
-let libsOption = Option<string array>("-l", "Link against library (passed through to assemble/link command)")
+let libsOption = Option<string array>("-l", Description = "Link against library (passed through to assemble/link command)")
 do libsOption.AllowMultipleArgumentsPerToken <- true
 
 let targetOption =
-    let opt = Option<string>("-t", "--target", "Choose target platform", DefaultValueFactory = fun _ -> if currentPlatform = Settings.OS_X then "osx" else "linux")
+    let opt = Option<string>("-t", "--target", Description = "Choose target platform", DefaultValueFactory = fun _ -> if currentPlatform = Settings.OS_X then "osx" else "linux")
     opt.AcceptOnlyFromAmong("linux", "osx") |> ignore
     opt
 
-let debugOption = Option<bool>("-d", "Write out pre- and post-register-allocation assembly and DOT files of interference graphs.")
+let debugOption = Option<bool>("-d", Description = "Write out pre- and post-register-allocation assembly and DOT files of interference graphs.")
 
 (* Optimization options *)
-let foldConstantsOption = Option<bool>("--fold-constants", "Enable constant folding")
-let eliminateDeadStoresOption = Option<bool>("--eliminate-dead-stores", "Enable dead store elimination")
-let propagateCopiesOption = Option<bool>("--propagate-copies", "Enable copy-propagation")
-let eliminateUnreachableCodeOption = Option<bool>("--eliminate-unreachable-code", "Enable unreachable code elimination")
-let optimizeOption = Option<bool>("-o", "--optimize", "Enable optimizations")
+let foldConstantsOption = Option<bool>("--fold-constants", Description = "Enable constant folding")
+let eliminateDeadStoresOption = Option<bool>("--eliminate-dead-stores", Description = "Enable dead store elimination")
+let propagateCopiesOption = Option<bool>("--propagate-copies", Description = "Enable copy-propagation")
+let eliminateUnreachableCodeOption = Option<bool>("--eliminate-unreachable-code", Description = "Enable unreachable code elimination")
+let optimizeOption = Option<bool>("-o", "--optimize", Description = "Enable optimizations")
 
 (* Positional argument *)
 let srcFileArgument = Argument<string>("files", Description = "Source file to compile")
