@@ -12,38 +12,24 @@ let suffix = function
             "Internal error: found instruction w/ non-scalar operand type"
 
 let align_directive =
-    eprintfn "[DEBUG] align_directive: evaluating at module load time, Platform=%A" !Settings.Platform
     match !Settings.Platform with
-    | OS_X ->
-        eprintfn "[DEBUG] align_directive: chose OS_X branch"
-        ".balign"
-    | Linux ->
-        eprintfn "[DEBUG] align_directive: chose Linux branch"
-        ".align"
+    | Settings.OS_X -> ".balign"
+    | Settings.Linux -> ".align"
 
 let show_label name =
-    eprintfn "[DEBUG] show_label INPUT: name=%A" name
-    let platform_value = !Settings.Platform
-    eprintfn "[DEBUG] Platform BEFORE match: %A" platform_value
-    let x = match platform_value with
-            | OS_X ->
-                eprintfn "[DEBUG] MATCH BRANCH: OS_X branch executed!"
-                "_" + name
-            | Linux ->
-                eprintfn "[DEBUG] MATCH BRANCH: Linux branch executed!"
-                name
-    eprintfn "[DEBUG] show_label OUTPUT: platform=%A result=%A" !Settings.Platform x
-    x
+    match !Settings.Platform with
+    | Settings.OS_X -> "_" + name
+    | Settings.Linux -> name
 
 let show_local_label label =
     match !Settings.Platform with
-    | OS_X -> "L" + label
-    | Linux -> ".L" + label
+    | Settings.OS_X -> "L" + label
+    | Settings.Linux -> ".L" + label
 
 let show_fun_name f =
     match !Settings.Platform with
-    | OS_X -> "_" + f
-    | Linux ->
+    | Settings.OS_X -> "_" + f
+    | Settings.Linux ->
         if AssemblySymbols.is_defined f then f else f + "@PLT"
 
 let show_long_reg = function
