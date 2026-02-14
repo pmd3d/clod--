@@ -17,10 +17,10 @@ let peek (tokens: t) =
 
 let npeek = Stream.npeek
 
-let is_empty (tokens: t) =
+let isEmpty (tokens: t) =
     try
         Stream.empty tokens
         true
     with Stream.Failure -> false
 
-let of_list = Stream.ofList
+let ofList = Stream.ofList

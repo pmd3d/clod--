@@ -769,7 +769,7 @@ module Private =
 
     let parseProgram (tokens: TokStream.t) =
         let rec parseDeclLoop () =
-            if TokStream.is_empty tokens then
+            if TokStream.isEmpty tokens then
                 []
             else
                 let nextDecl = parseDeclaration tokens
@@ -779,7 +779,7 @@ module Private =
 
 let parse tokens =
     try
-        let tokenStream = TokStream.of_list tokens
+        let tokenStream = TokStream.ofList tokens
         Private.parseProgram tokenStream
     with
     | TokStream.End_of_stream ->

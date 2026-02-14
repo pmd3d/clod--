@@ -35,13 +35,14 @@ let const_convert target_type c =
     if C.type_of_const c = target_type then c
     else
         match (target_type, c) with
-        (* Because some values in the range of both double and ulong are outside the
-           range of int64, we need to handle conversions between double and ulong as
-           special cases instead of converting through int64 *)
-        | T.Double, C.ConstULong ul ->
-            C.ConstDouble(float ul)
+        (* Convert to/from double directly to avoid precision loss
+           going through the int64 roundtrip *)
+        | T.Double, _ ->
+            C.ConstDouble(float (const_to_int64 c))
         | T.ULong, C.ConstDouble d ->
             C.ConstULong(uint64 d)
+        | _, C.ConstDouble d ->
+            const_of_int64 (int64 d) target_type
         | _ ->
             (* Convert c to int64, then to target type, to avoid exponential
                explosion of different cases. Conversion to int64 preserves value
