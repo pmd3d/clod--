@@ -59,6 +59,7 @@ let assembleAndLink (link: bool) (cleanup: bool) (libs: string list) (src: strin
 
 let driver (target: Settings.Target) (debug: bool) (libs: string list) (stage: Settings.Stage) (optimizations: Settings.Optimizations) (src: string) =
     Settings.Platform := target
+    eprintfn "[DEBUG] driver: Settings.Platform set to %A" !Settings.Platform
     Settings.Debug := debug
     let preprocessedName = preprocess src
     let assemblyName = compile stage optimizations preprocessedName
@@ -167,6 +168,9 @@ let main argv =
                 | null -> []
                 | arr -> arr |> Array.toList
     let src = parseResult.GetValue(srcFileArgument)
+    if not (File.Exists(src)) then
+        eprintfn "Error: file not found: %s" src
+        exit 1    
     let optimizations =
         setOptions
             (parseResult.GetValue(optimizeOption))
