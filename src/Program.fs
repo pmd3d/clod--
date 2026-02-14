@@ -1,4 +1,4 @@
-﻿﻿open System
+﻿open System
 open System.CommandLine
 open System.CommandLine.Invocation
 open System.Diagnostics
