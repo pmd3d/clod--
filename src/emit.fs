@@ -17,9 +17,12 @@ let align_directive =
     | Linux -> ".align"
 
 let show_label name =
-    match !Settings.Platform with
-    | OS_X -> "_" + name
-    | Linux -> name
+    eprintfn "[DEBUG] show_label INPUT: name=%A" name
+    let x = match !Settings.Platform with
+            | OS_X -> "_" + name
+            | Linux -> name
+    eprintfn "[DEBUG] show_label OUTPUT: platform=%A result=%A" !Settings.Platform x
+    x
 
 let show_local_label label =
     match !Settings.Platform with
