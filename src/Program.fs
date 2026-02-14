@@ -167,6 +167,9 @@ let main argv =
                 | null -> []
                 | arr -> arr |> Array.toList
     let src = parseResult.GetValue(srcFileArgument)
+    if not (File.Exists(src)) then
+        eprintfn "Error: file not found: %s" src
+        exit 1
     let optimizations =
         setOptions
             (parseResult.GetValue(optimizeOption))
