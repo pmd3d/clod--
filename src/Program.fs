@@ -59,7 +59,6 @@ let assembleAndLink (link: bool) (cleanup: bool) (libs: string list) (src: strin
 
 let driver (target: Settings.Target) (debug: bool) (libs: string list) (stage: Settings.Stage) (optimizations: Settings.Optimizations) (src: string) =
     Settings.Platform := target
-    eprintfn "[DEBUG] driver: Settings.Platform set to %A" !Settings.Platform
     Settings.Debug := debug
     let preprocessedName = preprocess src
     let assemblyName = compile stage optimizations preprocessedName

@@ -1,4 +1,4 @@
-﻿﻿module Emit
+﻿module Emit
 
 open Assembly
 
