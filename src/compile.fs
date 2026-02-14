@@ -1,6 +1,6 @@
 ﻿module Compile
 
-let compile (stage: Settings.stage) (optimizations: Settings.optimizations) (src_file: string) =
+let compile (stage: Settings.Stage) (optimizations: Settings.Optimizations) (src_file: string) =
     // read in the file - TODO use streams?
     let source = System.IO.File.ReadAllText(src_file)
     // Lex it
@@ -36,13 +36,13 @@ let compile (stage: Settings.stage) (optimizations: Settings.optimizations) (src
                     // 1. convert TACKY to assembly
                     let asm_ast = Codegen.gen optimized_tacky
                     // print pre-pseudoreg-allocation assembly if debug enabled
-                    if Settings.debug.Value then
+                    if Settings.Debug.Value then
                         let prealloc_filename =
                             System.IO.Path.ChangeExtension(src_file, null) + ".prealloc.debug.s"
                         Emit.emit prealloc_filename asm_ast
                     // replace remaining pseudoregisters with Data/Stack operands
                     let asm_ast1 = Regalloc.allocate_registers aliased_vars asm_ast
-                    if Settings.debug.Value then
+                    if Settings.Debug.Value then
                         let postalloc_filename =
                             System.IO.Path.ChangeExtension(src_file, null) + ".postalloc.debug.s"
                         Emit.emit postalloc_filename asm_ast

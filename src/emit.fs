@@ -12,22 +12,22 @@ let suffix = function
             "Internal error: found instruction w/ non-scalar operand type"
 
 let align_directive =
-    match !Settings.platform with
+    match !Settings.Platform with
     | OS_X -> ".balign"
     | Linux -> ".align"
 
 let show_label name =
-    match !Settings.platform with
+    match !Settings.Platform with
     | OS_X -> "_" + name
     | Linux -> name
 
 let show_local_label label =
-    match !Settings.platform with
+    match !Settings.Platform with
     | OS_X -> "L" + label
     | Linux -> ".L" + label
 
 let show_fun_name f =
-    match !Settings.platform with
+    match !Settings.Platform with
     | OS_X -> "_" + f
     | Linux ->
         if AssemblySymbols.is_defined f then f else f + "@PLT"
@@ -311,7 +311,7 @@ let emit_init (chan: System.IO.StreamWriter) = function
 
 let emit_constant (chan: System.IO.StreamWriter) name alignment init =
     let constant_section_name =
-        match (!Settings.platform, init) with
+        match (!Settings.Platform, init) with
         | Settings.Linux, _ -> ".section .rodata"
         | Settings.OS_X, Initializers.StringInit _ -> ".cstring"
         | Settings.OS_X, _ ->
@@ -359,7 +359,7 @@ let emit_tl (chan: System.IO.StreamWriter) = function
         emit_constant chan name alignment init
 
 let emit_stack_note (chan: System.IO.StreamWriter) =
-    match !Settings.platform with
+    match !Settings.Platform with
     | Settings.OS_X -> ()
     | Settings.Linux ->
         chan.Write("\t.section .note.GNU-stack,\"\",@progbits\n")

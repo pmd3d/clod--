@@ -1,6 +1,6 @@
 ﻿module Settings
 
-type stage =
+type Stage =
     | Lex
     | Parse
     | Validate
@@ -10,12 +10,12 @@ type stage =
     | Obj
     | Executable
 
-type target = OS_X | Linux
+type Target = OS_X | Linux
 
-let platform = ref OS_X // default to OS_X
-let debug = ref false
+let Platform = ref OS_X // default to OS_X
+let Debug = ref false
 
-type optimizations = {
+type Optimizations = {
     constant_folding: bool
     dead_store_elimination: bool
     unreachable_code_elimination: bool

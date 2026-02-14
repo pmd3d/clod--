@@ -23,7 +23,7 @@ type IntMap<'v> = Map<int, 'v>
 
 let debug_print fmt =
     Printf.kprintf
-        (fun msg -> if !Settings.debug then printf "%s" msg)
+        (fun msg -> if !Settings.Debug then printf "%s" msg)
         fmt
 
 // extract all operands from an instruction.

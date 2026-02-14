@@ -10,7 +10,7 @@ let debug_print (extra_tag: string) (pp_var: System.IO.TextWriter -> 'var -> uni
                 (debug_label: string)
                 (set_debug_label: string -> 'cfg -> 'cfg)
                 (cfg: 'cfg) =
-    if Settings.debug.Value then
+    if Settings.Debug.Value then
         let livevar_printer (fmt: System.IO.TextWriter) (live_vars: 'varSet) =
             elements live_vars
             |> List.iteri (fun i v ->

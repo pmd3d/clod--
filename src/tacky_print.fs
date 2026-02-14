@@ -214,7 +214,7 @@ let pp_program (escape_brackets: bool) (out: System.IO.TextWriter) (Program tls)
     out.Flush()
 
 let debug_print_tacky (src_filename: string) tacky_prog =
-    if Settings.debug.Value then
+    if Settings.Debug.Value then
         let tacky_file =
             UniqueIds.makeLabel (System.IO.Path.GetFileNameWithoutExtension(src_filename))
             + ".debug.tacky"
