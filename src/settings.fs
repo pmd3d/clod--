@@ -12,7 +12,7 @@ type Stage =
 
 type Target = OS_X | Linux
 
-let Platform = ref OS_X // default to OS_X
+let Platform = ref Linux // default to linux
 let Debug = ref false
 
 type Optimizations = {
