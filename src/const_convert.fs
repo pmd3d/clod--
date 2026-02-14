@@ -37,6 +37,8 @@ let const_convert target_type c =
         match (target_type, c) with
         (* Convert to/from double directly to avoid precision loss
            going through the int64 roundtrip *)
+        | T.Double, C.ConstULong ul ->
+            C.ConstDouble(float ul)
         | T.Double, _ ->
             C.ConstDouble(float (const_to_int64 c))
         | T.ULong, C.ConstDouble d ->
