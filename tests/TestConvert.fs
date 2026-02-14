@@ -3,11 +3,10 @@
 open Xunit
 open System
 
-let print_const c = 
+let print_const c =
   match c with
     | Const.ConstDouble d ->
-    let s = d.ToString("0.################################################################", System.Globalization.CultureInfo.InvariantCulture)
-    sprintf "ConstDouble %s" s
+      sprintf "ConstDouble %.20g" d
     | _ -> sprintf "%A" c
 
 let convert_and_print target_type c =
