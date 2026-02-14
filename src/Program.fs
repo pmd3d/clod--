@@ -45,10 +45,7 @@ let compile (stage: Settings.Stage) (optimizations: Settings.Optimizations) (pre
     runCommand "rm" [ preprocessedSrc ]
     replaceExtension preprocessedSrc ".s"
 
-let assembleAndLink (?link: bool, ?cleanup: bool, ?libs: string list) (src: string) =
-    let link = defaultArg link true
-    let cleanup = defaultArg cleanup true
-    let libs = defaultArg libs []
+let assembleAndLink (link: bool) (cleanup: bool) (libs: string list) (src: string) =
     let linkOption = if link then [] else [ "-c" ]
     let libOptions = List.map (fun l -> "-l" + l) libs
     let assemblyFile = replaceExtension src ".s"
@@ -67,9 +64,9 @@ let driver (target: Settings.Target) (debug: bool) (libs: string list) (stage: S
     let assemblyName = compile stage optimizations preprocessedName
     match stage with
     | Settings.Executable ->
-        assembleAndLink (link = true, cleanup = (not debug), libs = libs) assemblyName
+        assembleAndLink true (not debug) libs assemblyName
     | Settings.Obj ->
-        assembleAndLink (link = false, cleanup = (not debug)) assemblyName
+        assembleAndLink false (not debug) [] assemblyName
     | _ -> ()
 
 (* Command-line options / optimization options *)
