@@ -159,8 +159,6 @@ let main argv =
             eprintfn "Error: %s" error.Message
         eprintfn ""
         eprintfn "Usage: clod-- [options] <files>"
-        eprintfn ""
-        eprintfn "Run 'clod-- --help' for more information."
         exit 1
     let stage = parseStage parseResult
     let target = parseTarget parseResult
