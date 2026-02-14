@@ -1,4 +1,4 @@
-﻿open System
+﻿﻿open System
 open System.CommandLine
 open System.CommandLine.Invocation
 open System.Diagnostics
@@ -154,7 +154,15 @@ let main argv =
     rootCommand.Arguments.Add(srcFileArgument)
 
     let parseResult = rootCommand.Parse(argv :> System.Collections.Generic.IReadOnlyList<string>)
-    let stage = parseStage parseResult 
+    if parseResult.Errors.Count > 0 then
+        for error in parseResult.Errors do
+            eprintfn "Error: %s" error.Message
+        eprintfn ""
+        eprintfn "Usage: clod-- [options] <files>"
+        eprintfn ""
+        eprintfn "Run 'clod-- --help' for more information."
+        exit 1
+    let stage = parseStage parseResult
     let target = parseTarget parseResult
     let debug = parseResult.GetValue(debugOption)
     let libs = match parseResult.GetValue(libsOption) with
@@ -170,5 +178,3 @@ let main argv =
             (parseResult.GetValue(eliminateUnreachableCodeOption))
     driver target debug libs stage optimizations src
     0
-
-
