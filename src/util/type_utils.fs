@@ -7,11 +7,11 @@ let setType e newType : Ast.TypedExp.Exp = { e = e; t = newType }
 
 let rec getSize =
     function
-    | Char | SChar | UChar -> 1
-    | Int | UInt -> 4
-    | Long | ULong | Double | Pointer _ -> 8
+    | Char | SChar | UChar -> 1L
+    | Int | UInt -> 4L
+    | Long | ULong | Double | Pointer _ -> 8L
     | Array(elemType, size) -> size * getSize elemType
-    | Structure tag -> (TypeTable.find tag).size
+    | Structure tag -> int64 (TypeTable.find tag).size
     | (FunType _ | Void) as t ->
         failwith
             ("Internal error: type doesn't have size: " + show t)

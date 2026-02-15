@@ -111,7 +111,7 @@ let convert_type = function
   | Types.Double -> Assembly.Double
   | (Types.Array _ | Types.Structure _) as t ->
       Assembly.ByteArray
-        { size = TypeUtils.getSize t; alignment = TypeUtils.getAlignment t }
+        { size = int (TypeUtils.getSize t); alignment = TypeUtils.getAlignment t }
   | (Types.FunType _ | Types.Void) as t ->
       failwith
         ("Internal error, converting type to assembly: " + Types.show t)
@@ -193,7 +193,7 @@ let classify_params_helper typed_asm_vals return_on_stack =
           | Assembly.PseudoMem (n, 0) -> n
           | _ -> failwith "Bad structure operand"
         
-        let var_size = TypeUtils.getSize tacky_t
+        let var_size = int (TypeUtils.getSize tacky_t)
         let classes = classify_structure s
         let updated_int, updated_dbl, use_stack =
           if List.head classes = Mem then
@@ -296,7 +296,7 @@ let classify_return_helper ret_type asm_retval =
           | Integer ->
               let eightbyte_type =
                 get_eightbyte_type i
-                  (TypeUtils.getSize ret_type)
+                  (int (TypeUtils.getSize ret_type))
               in
               (i + 1, ints @ [ (eightbyte_type, operand) ], dbls)
           | Mem ->
@@ -445,7 +445,7 @@ let convert_return_instruction = function
   | Some v ->
       let int_retvals, dbl_retvals, return_on_stack = classify_return_value v in
       if return_on_stack then
-        let byte_count = TypeUtils.getSize (Tacky.type_of_val v) in
+        let byte_count = int (TypeUtils.getSize (Tacky.type_of_val v)) in
         let get_ptr = Assembly.Mov (Assembly.Quadword, Assembly.Memory (Assembly.BP, -8), Assembly.Reg Assembly.AX) in
         let copy_into_ptr =
           copy_bytes (convert_val v) (Assembly.Memory (Assembly.AX, 0)) byte_count
@@ -480,7 +480,7 @@ let convert_instruction = function
   | Tacky.Copy { src = src; dst = dst } ->
       let asm_src = convert_val src in
       let asm_dst = convert_val dst in
-      let byte_count = TypeUtils.getSize (Tacky.type_of_val src) in
+      let byte_count = int (TypeUtils.getSize (Tacky.type_of_val src)) in
       copy_bytes asm_src asm_dst byte_count
   | Tacky.Return maybe_val -> convert_return_instruction maybe_val
   | Tacky.Unary { op = Tacky.Not; src = src; dst = dst } ->
@@ -571,7 +571,7 @@ let convert_instruction = function
   | Tacky.Load loadInfo ->
       let asm_src_ptr = convert_val loadInfo.src_ptr in
       let asm_dst = convert_val loadInfo.dst in
-      let byte_count = TypeUtils.getSize (Tacky.type_of_val loadInfo.dst) in
+      let byte_count = int (TypeUtils.getSize (Tacky.type_of_val loadInfo.dst)) in
       Assembly.Mov (Assembly.Quadword, asm_src_ptr, Assembly.Reg Assembly.R9)
       :: copy_bytes (Assembly.Memory (Assembly.R9, 0)) asm_dst byte_count
   | Tacky.Store storeInfo
@@ -583,7 +583,7 @@ let convert_instruction = function
   | Tacky.Store storeInfo ->
       let asm_src = convert_val storeInfo.src in
       let asm_dst_ptr = convert_val storeInfo.dst_ptr in
-      let byte_count = TypeUtils.getSize (Tacky.type_of_val storeInfo.src) in
+      let byte_count = int (TypeUtils.getSize (Tacky.type_of_val storeInfo.src)) in
       Assembly.Mov (Assembly.Quadword, asm_dst_ptr, Assembly.Reg Assembly.R9)
       :: copy_bytes asm_src (Assembly.Memory (Assembly.R9, 0)) byte_count
   | Tacky.GetAddress { src = src; dst = dst } ->
@@ -754,7 +754,7 @@ let convert_instruction = function
   | Tacky.CopyToOffset { src = src; dst = dst; offset = offset } ->
       let asm_src = convert_val src in
       let asm_dst = Assembly.PseudoMem (dst, offset) in
-      let byte_count = TypeUtils.getSize (Tacky.type_of_val src) in
+      let byte_count = int (TypeUtils.getSize (Tacky.type_of_val src)) in
       copy_bytes asm_src asm_dst byte_count
   | Tacky.CopyFromOffset { src = src; dst = dst; offset = offset }
     when TypeUtils.isScalar (Tacky.type_of_val dst) ->
@@ -762,7 +762,7 @@ let convert_instruction = function
   | Tacky.CopyFromOffset { src = src; dst = dst; offset = offset } ->
       let asm_src = Assembly.PseudoMem (src, offset) in
       let asm_dst = convert_val dst in
-      let byte_count = TypeUtils.getSize (Tacky.type_of_val dst) in
+      let byte_count = int (TypeUtils.getSize (Tacky.type_of_val dst)) in
       copy_bytes asm_src asm_dst byte_count
   | Tacky.AddPtr { ptr = ptr; index = Tacky.Constant (Const.ConstLong c); scale = scale; dst = dst } ->
       (* note that typechecker converts index to long. QUESTION: what's the
@@ -837,13 +837,13 @@ let returns_on_stack fn_name =
 (* Special-case logic to get type/alignment of array; array variables w/ size
    >=16 bytes have alignment of 16 *)
 let get_var_alignment = function
-  | Types.Array _ as t when TypeUtils.getSize t >= 16 -> 16
+  | Types.Array _ as t when int (TypeUtils.getSize t) >= 16 -> 16
   | t -> TypeUtils.getAlignment t
 
 let convert_var_type = function
   | Types.Array _ as t ->
       Assembly.ByteArray
-        { size = TypeUtils.getSize t; alignment = get_var_alignment t }
+        { size = int (TypeUtils.getSize t); alignment = get_var_alignment t }
   | other -> convert_type other
 
 let convert_top_level = function

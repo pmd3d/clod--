@@ -60,7 +60,7 @@ let typecheck_struct_decl ({ U.tag = tag; U.members = members } as sd) =
                  Rounding.roundAwayFromZero member_alignment current_size
              let member_entry = { TypeTable.member_type = member_type; TypeTable.offset = offset }
              let new_alignment = Operators.max current_alignment member_alignment
-             let new_size = offset + getSize member_type
+             let new_size = offset + int (getSize member_type)
              let new_members =
                  Map.add member_name member_entry current_members
              (new_size, new_alignment, new_members)
@@ -137,7 +137,7 @@ let opt_typecheck typecheck_fn = function
 
 let typecheck_string s =
     let e = T.String s
-    let t = Types.Array(Char, String.length s + 1)
+    let t = Types.Array(Char, int64 (String.length s + 1))
     setType e t
 
 let rec typecheck_exp = function
@@ -441,7 +441,7 @@ let rec static_init_helper var_type init =
     match (var_type, init) with
     | Types.Array(elem_type, size), UE.SingleInit (UE.String s) ->
         if isCharacter elem_type then
-            (match size - String.length s with
+            (match int size - String.length s with
              | 0 -> [ Initializers.StringInit (s, false) ]
              | 1 -> [ Initializers.StringInit (s, true) ]
              | n when n > 0 ->
@@ -470,7 +470,7 @@ let rec static_init_helper var_type init =
                     else []
                 let more_static_inits = static_init_helper memb.member_type init
                 let new_inits = current_inits @ padding @ more_static_inits
-                let new_offset = memb.offset + getSize memb.member_type
+                let new_offset = memb.offset + int (getSize memb.member_type)
                 (new_offset, new_inits)
             let initialized_members = ListUtil.take (List.length inits) members
             let initialized_size, explicit_initializers =
@@ -505,10 +505,10 @@ let rec static_init_helper var_type init =
     | Array(elem_type, size), UE.CompoundInit inits ->
         let static_inits = List.collect (static_init_helper elem_type) inits
         let padding =
-            match size - List.length inits with
+            match int size - List.length inits with
             | 0 -> []
             | n when n > 0 ->
-                let zero_bytes = getSize elem_type * n
+                let zero_bytes = int (getSize elem_type) * n
                 [ Initializers.ZeroInit zero_bytes ]
             | _ -> failwith "Too many values in static initializer"
         static_inits @ padding
@@ -523,7 +523,7 @@ let rec make_zero_init t =
     let scalar c = T.SingleInit { e = Constant c; t = t }
     match t with
     | Types.Array(elem_type, size) ->
-        T.CompoundInit (t, ListUtil.makeList size (make_zero_init elem_type))
+        T.CompoundInit (t, ListUtil.makeList (int size) (make_zero_init elem_type))
     | Structure tag ->
         let members = TypeTable.get_members tag
         T.CompoundInit
@@ -545,7 +545,7 @@ let rec typecheck_init target_type init =
     | Types.Array(elem_type, size), UE.SingleInit (UE.String s) ->
         if not (isCharacter elem_type) then
             failwith "Can't initialize non-character type with string literal"
-        else if String.length s > size then
+        else if String.length s > int size then
             failwith "Too many characters in string literal"
         else T.SingleInit (setType (T.String s) target_type)
     | Types.Structure tag, UE.CompoundInit init_list ->
@@ -569,13 +569,13 @@ let rec typecheck_init target_type init =
         let cast_exp = convert_by_assignment typechecked_e target_type
         T.SingleInit cast_exp
     | Array(elem_type, size), UE.CompoundInit inits ->
-        if List.length inits > size then
+        if List.length inits > int size then
             failwith "too many values in initializer "
         else
             let typechecked_inits = List.map (typecheck_init elem_type) inits
             let padding =
                 ListUtil.makeList
-                    (size - List.length inits)
+                    (int size - List.length inits)
                     (make_zero_init elem_type)
             T.CompoundInit (target_type, typechecked_inits @ padding)
     | _ -> failwith "Can't initializer scalar value from compound initializer"
@@ -807,4 +807,3 @@ let typecheck_global_decl = function
 
 let typecheck (Ast.Untyped.Program decls) : Ast.Typed.T =
     Ast.Typed.Program (List.map typecheck_global_decl decls)
-

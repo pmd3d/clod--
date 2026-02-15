@@ -238,12 +238,12 @@ module Private =
             match parseConst tokens with
             | Const.ConstDouble _ ->
                 raise (ParseError "Floating-point array dimensions not allowed")
-            | Const.ConstChar c -> int c
-            | Const.ConstInt i -> int i
-            | Const.ConstLong l -> int l
-            | Const.ConstUChar uc -> int uc
-            | Const.ConstUInt u -> int u
-            | Const.ConstULong ul -> int ul
+            | Const.ConstChar c -> int64 c
+            | Const.ConstInt i -> int64 i
+            | Const.ConstLong l -> int64 l
+            | Const.ConstUChar uc -> int64 uc
+            | Const.ConstUInt u -> int64 u
+            | Const.ConstULong ul -> int64 ul
         expect T.CloseBracket tokens
         dim
 
@@ -254,7 +254,7 @@ module Private =
 
     type AbstractDeclarator =
         | AbstractPointer of AbstractDeclarator
-        | AbstractArray of AbstractDeclarator * int
+        | AbstractArray of AbstractDeclarator * int64
         | AbstractBase
 
     let rec parseAbstractArrayDeclSuffix baseDecl (tokens: TokStream.t) =
@@ -493,7 +493,7 @@ module Private =
     type Declarator =
         | Ident of string
         | PointerDeclarator of Declarator
-        | ArrayDeclarator of Declarator * int
+        | ArrayDeclarator of Declarator * int64
         | FunDeclarator of ParamInfo list * Declarator
 
     and ParamInfo = Param of Types.t * Declarator
