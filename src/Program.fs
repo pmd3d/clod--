@@ -1,4 +1,4 @@
-﻿﻿open System
+﻿open System
 open System.CommandLine
 open System.CommandLine.Invocation
 open System.Diagnostics
@@ -166,12 +166,13 @@ let main argv =
     rootCommand.Arguments.Add(srcFileArgument)
 
     let expandedArgv = expandCompactOptions argv
+    eprintfn "expandedargv %A" expandedArgv
     let parseResult = rootCommand.Parse(expandedArgv :> System.Collections.Generic.IReadOnlyList<string>)
     if parseResult.Errors.Count > 0 then
         for error in parseResult.Errors do
             eprintfn "Error: %s" error.Message
         eprintfn ""
-        eprintfn "Usage: clod-- <file> [options]"
+        eprintfn "Usage: clod-- [options] <file>"
         exit 1
     let stage = parseStage parseResult
     let target = parseTarget parseResult
