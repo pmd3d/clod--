@@ -97,9 +97,12 @@ let assemblyOption = Option<bool>("-S", "-s", Description = "Stop before assembl
 let objOption = Option<bool>("-c", Description = "Stop before invoking linker (keep .o file)")
 
 (* Other options *)
-let libsOption = Option<string array>("-l", Description = "Link against library (passed through to assemble/link command)")
-do libsOption.AllowMultipleArgumentsPerToken <- true
-
+let libsOption =
+    let opt = Option<string array>("-l", Description = "Link against library (passed through to assemble/link command)")
+    opt.Arity <- ArgumentArity.ZeroOrMore  // Explicitly set arity
+    opt.AllowMultipleArgumentsPerToken <- true
+    opt
+    
 let targetOption =
     let opt = Option<string>("-t", "--target", Description = "Choose target platform", DefaultValueFactory = fun _ -> if currentPlatform = Settings.OS_X then "osx" else "linux")
     opt.AcceptOnlyFromAmong("linux", "osx") |> ignore
