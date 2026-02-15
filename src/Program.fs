@@ -99,7 +99,7 @@ let objOption = Option<bool>("-c", Description = "Stop before invoking linker (k
 (* Other options *)
 let libsOption =
     let opt = Option<string array>("-l", Description = "Link against library (passed through to assemble/link command)")
-    opt.Arity <- ArgumentArity.ExactlyOne
+    opt.Arity <- ArgumentArity.ZeroOrMore
     opt.AllowMultipleArgumentsPerToken <- false
     opt
     
