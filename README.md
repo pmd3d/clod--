@@ -13,6 +13,7 @@ This implementation does not include the optimizations from chapters 19 and 20.
 ## Build and Run
 
 ```bash
+git clone https://github.com/pmd3d/clod--.git
 cd src/
 dotnet run
 ```
