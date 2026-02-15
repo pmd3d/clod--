@@ -16,7 +16,7 @@ let create_tmp t =
     name
 
 let get_ptr_scale = function
-    | Types.Pointer referenced -> TypeUtils.getSize referenced
+    | Types.Pointer referenced -> int (TypeUtils.getSize referenced)
     | t ->
         failwith
             ("Internal error: tried to get scale of non-pointer type: "
@@ -413,7 +413,7 @@ let rec emit_string_init dst offset (s: byte[]) =
 let rec emit_compound_init name offset = function
     | Ast.Initializr.SingleInit { e = Ast.InnerExp.String s; t = Types.Array(_, size) } ->
         let str_bytes = Bytes.ofString s
-        let padding_bytes = Bytes.make (size - String.length s) (char 0)
+        let padding_bytes = Bytes.make (int size - String.length s) (char 0)
         emit_string_init name offset (Bytes.cat str_bytes padding_bytes)
     | Ast.Initializr.SingleInit e ->
         let eval_init, v = emit_tacky_and_convert e
@@ -422,7 +422,7 @@ let rec emit_compound_init name offset = function
     | Ast.Initializr.CompoundInit(Types.Array(elem_type, _), inits) ->
         let handle_init idx elem_init =
             let new_offset =
-                offset + (idx * TypeUtils.getSize elem_type)
+                offset + (idx * int (TypeUtils.getSize elem_type))
             emit_compound_init name new_offset elem_init
         List.concat (List.mapi handle_init inits)
     | Ast.Initializr.CompoundInit(Types.Structure tag, inits) ->

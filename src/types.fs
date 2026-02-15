@@ -11,7 +11,7 @@ type t =
     | Double
     | Pointer of t
     | Void
-    | Array of elemType: t * size: int
+    | Array of elemType: t * size: int64
     | FunType of paramTypes: t list * retType: t
     | Structure of string (* tag *)
 
@@ -28,7 +28,7 @@ let rec show (typ: t) : string =
     | Pointer inner -> sprintf "%s*" (show inner)
     | Void -> "Void"
     | Array(elemType, size) ->
-        sprintf "(%s, %d)" (show elemType) size
+        sprintf "(%s, %s)" (show elemType) (string size)
     | FunType(paramTypes, retType) ->
         let paramStr =
             paramTypes
