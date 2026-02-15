@@ -1,4 +1,4 @@
-﻿open System
+﻿﻿open System
 open System.CommandLine
 open System.CommandLine.Invocation
 open System.Diagnostics
@@ -133,6 +133,18 @@ let parseTarget (parseResult : ParseResult) =
     | "linux" -> Settings.Linux
     | _ -> currentPlatform
 
+(* Expand compact option forms like -lm into -l m for System.CommandLine compatibility *)
+let expandCompactOptions (argv: string array) : string array =
+    argv
+    |> Array.collect (fun arg ->
+        // Match pattern like -lXXX where XXX is the library name
+        if arg.StartsWith("-l") && arg.Length > 2 then
+            // Split "-lm" into [|"-l"; "m"|]
+            [| "-l"; arg.Substring(2) |]
+        else
+            [| arg |]
+    )
+
 [<EntryPoint>]
 let main argv =
     let rootCommand = RootCommand("A clod-- compiler")
@@ -153,7 +165,8 @@ let main argv =
     rootCommand.Options.Add(optimizeOption)
     rootCommand.Arguments.Add(srcFileArgument)
 
-    let parseResult = rootCommand.Parse(argv :> System.Collections.Generic.IReadOnlyList<string>)
+    let expandedArgv = expandCompactOptions argv
+    let parseResult = rootCommand.Parse(expandedArgv :> System.Collections.Generic.IReadOnlyList<string>)
     if parseResult.Errors.Count > 0 then
         for error in parseResult.Errors do
             eprintfn "Error: %s" error.Message
