@@ -2,7 +2,7 @@
 
 An F# rewrite of [nqcc2](https://github.com/nlsandler/nqcc2), implementing a C compiler based on Nora Sandler's book [Writing a C Compiler](https://nostarch.com/writing-c-compiler).
 
-This implementation does not include the optimizations from chapters 19 and 20.
+This implementation does not include extra credit features or the optimizations from chapters 19 and 20.
 
 ## Prerequisites
 
