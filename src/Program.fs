@@ -99,8 +99,8 @@ let objOption = Option<bool>("-c", Description = "Stop before invoking linker (k
 (* Other options *)
 let libsOption =
     let opt = Option<string array>("-l", Description = "Link against library (passed through to assemble/link command)")
-    opt.Arity <- ArgumentArity.ZeroOrMore  // Explicitly set arity
-    opt.AllowMultipleArgumentsPerToken <- true
+    opt.Arity <- ArgumentArity.ExactlyOne
+    opt.AllowMultipleArgumentsPerToken <- false
     opt
     
 let targetOption =
@@ -169,7 +169,6 @@ let main argv =
     rootCommand.Arguments.Add(srcFileArgument)
 
     let expandedArgv = expandCompactOptions argv
-    eprintfn "expandedargv %A" expandedArgv
     let parseResult = rootCommand.Parse(expandedArgv :> System.Collections.Generic.IReadOnlyList<string>)
     if parseResult.Errors.Count > 0 then
         for error in parseResult.Errors do
