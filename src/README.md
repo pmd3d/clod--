@@ -1,2 +1,24 @@
 # clod--
-nqcc2 project rewrite to f# using claude clumsily 
+
+An F# rewrite of [nqcc2](https://github.com/nlsandler/nqcc2), implementing a C compiler based on Nora Sandler's book [Writing a C Compiler](https://nostarch.com/writing-c-compiler).
+
+This implementation does not include the optimizations from chapters 19 and 20.
+
+## Prerequisites
+
+- .NET 8 SDK
+- gcc (for linking and assembler)
+- Linux or WSL
+
+## Build and Run
+
+```bash
+cd src/
+dotnet run
+```
+
+## Publish Standalone Executable
+
+```bash
+dotnet publish -c Release --self-contained -p:PublishSingleFile=true
+```
