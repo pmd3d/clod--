@@ -156,7 +156,7 @@ let classify_new_structure tag =
           let member_types = TypeTable.get_member_types struct_tag
           List.collect f member_types
       | Types.Array (elemType, size) ->
-          List.concat (ListUtil.makeList size (f elemType))
+          List.concat (ListUtil.makeList (int size) (f elemType))
       | t -> [ t ]
     
     let scalar_types = f (Types.Structure tag)

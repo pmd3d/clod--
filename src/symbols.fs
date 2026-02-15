@@ -38,7 +38,7 @@ let get_opt name =
 
 let add_string (s: string) =
     let str_id = UniqueIds.makeNamedTemporary "string"
-    let t = Types.Array (Types.Char, String.length s + 1)
+    let t = Types.Array (Types.Char, int64 (String.length s + 1))
     symbol_table.[str_id] <-
         { t = t; attrs = ConstAttr (Initializers.StringInit (s, true)) }
     str_id
