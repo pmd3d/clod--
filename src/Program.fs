@@ -158,7 +158,7 @@ let main argv =
         for error in parseResult.Errors do
             eprintfn "Error: %s" error.Message
         eprintfn ""
-        eprintfn "Usage: clod-- [options] <files>"
+        eprintfn "Usage: clod-- <file> [options]"
         exit 1
     let stage = parseStage parseResult
     let target = parseTarget parseResult
