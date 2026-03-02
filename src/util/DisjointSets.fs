@@ -2,7 +2,7 @@
 
 type DisjointSet<'a when 'a: comparison> = Map<'a, 'a>
 
-let iniDisjointSet<'a when 'a: comparison> : DisjointSet<'a> = Map.empty
+let init<'a when 'a: comparison> : DisjointSet<'a> = Map.empty
 
 let union (x: 'a) (y: 'a) (disjSets: DisjointSet<'a>) : DisjointSet<'a> =
     Map.add x y disjSets

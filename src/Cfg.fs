@@ -252,11 +252,11 @@ let printGraphviz (ppInstr: System.IO.TextWriter -> 'instr -> unit)
     let ppEntryEdge (out: System.IO.TextWriter) lbl =
         out.Write("entry -> ")
         ppNodeId out lbl
-    let ppEdgei (out: System.IO.TextWriter) succ =
+    let ppEdgei i (out: System.IO.TextWriter) succ =
         out.Write(sprintf "block%d -> " i)
         ppNodeId out succ
     let ppEdges (out: System.IO.TextWriter) ((lbl: int), (blk: BasicBlock<'a, _>)) =
-        List.iter (ppEdgelbl out) blk.succs
+        List.iter (ppEdgei lbl out) blk.succs
     writer.WriteLine("digraph {")
     writer.WriteLine("  labeljust=l")
     writer.WriteLine("  node[shape=\"box\"]")

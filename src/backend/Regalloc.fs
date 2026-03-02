@@ -211,7 +211,7 @@ type Allocator(R : RegTypeOps) =
                 go acc' (y :: result) xs
         go acc [] lst
 
-    let meet fn_name (cfg: Cfg.ControlFlowGraph<Set<AsmOperand>, instruction>) (block: Cfg.BasicBlock<Set<AsmOperand>, instruction>) =
+    let meet fn_name (cfg: Cfg.ControlFlowGraph<Set<AsmOperand>, AsmInstruction>) (block: Cfg.BasicBlock<Set<AsmOperand>, AsmInstruction>) =
         let liveAtExit =
             let allReturnRegs =
                 AssemblySymbols.returnRegsUsed fn_name
@@ -230,7 +230,7 @@ type Allocator(R : RegTypeOps) =
         in
         List.fold updateLive Set.empty block.succs
 
-    let transfer (block: Cfg.BasicBlock<Set<AsmOperand>, instruction>) (endLiveRegs: Set<AsmOperand>) =
+    let transfer (block: Cfg.BasicBlock<Set<AsmOperand>, AsmInstruction>) (endLiveRegs: Set<AsmOperand>) =
         let processInstr currentLiveRegs ((_: Set<AsmOperand>), (i: AsmInstruction)) =
             let annotatedInstr = (currentLiveRegs, i) in
             let newLiveRegs =
@@ -259,11 +259,11 @@ type Allocator(R : RegTypeOps) =
             transfer
             Cfg.initializeAnnotation
             Cfg.updateBasicBlock
-            (fun (blk: Cfg.BasicBlock<Set<AsmOperand>, instruction>) -> blk.value)
-            (fun (blk: Cfg.BasicBlock<Set<AsmOperand>, instruction>) -> blk.preds)
-            (fun (cfg: Cfg.ControlFlowGraph<Set<AsmOperand>, instruction>) -> cfg.BasicBlocks)
-            (fun (cfg: Cfg.ControlFlowGraph<Set<AsmOperand>, instruction>) -> cfg.debugLabel)
-            (fun lbl (cfg: Cfg.ControlFlowGraph<Set<AsmOperand>, instruction>) -> { cfg with debugLabel = lbl })
+            (fun (blk: Cfg.BasicBlock<Set<AsmOperand>, AsmInstruction>) -> blk.value)
+            (fun (blk: Cfg.BasicBlock<Set<AsmOperand>, AsmInstruction>) -> blk.preds)
+            (fun (cfg: Cfg.ControlFlowGraph<Set<AsmOperand>, AsmInstruction>) -> cfg.BasicBlocks)
+            (fun (cfg: Cfg.ControlFlowGraph<Set<AsmOperand>, AsmInstruction>) -> cfg.debugLabel)
+            (fun lbl (cfg: Cfg.ControlFlowGraph<Set<AsmOperand>, AsmInstruction>) -> { cfg with debugLabel = lbl })
             (Cfg.printGraphviz (fun (out: System.IO.TextWriter) (i: AsmInstruction) -> out.Write(sprintf "%A" i)))
             cfg
 
@@ -341,7 +341,7 @@ type Allocator(R : RegTypeOps) =
             let nd1 = Map.find nd_id1 g
             Set.contains nd_id2 nd1.neighbors
 
-        let addEdges (livenessCfg: Cfg.ControlFlowGraph<Set<AsmOperand>, instruction>) interference_graph =
+        let addEdges (livenessCfg: Cfg.ControlFlowGraph<Set<AsmOperand>, AsmInstruction>) interference_graph =
             let handleInstr (liveAfterInstr, i) =
                 let _, updatedRegs = regsUsedAndWritten i in
 
@@ -364,7 +364,7 @@ type Allocator(R : RegTypeOps) =
 
             let allInstructions =
                 List.collect
-                    (fun (_, (blk: Cfg.BasicBlock<Set<AsmOperand>, instruction>)) -> blk.instructions)
+                    (fun (_, (blk: Cfg.BasicBlock<Set<AsmOperand>, AsmInstruction>)) -> blk.instructions)
                     livenessCfg.BasicBlocks
             in
             List.iter handleInstr allInstructions
