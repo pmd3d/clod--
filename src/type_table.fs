@@ -4,7 +4,7 @@ open System.Collections.Generic
 
 (* structure type definitions *)
 
-type MemberDef = { member_type: Types.t; offset: int }
+type MemberDef = { member_type: Types.CType; offset: int }
 
 type StructDef = {
     alignment: int

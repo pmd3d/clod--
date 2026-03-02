@@ -143,7 +143,7 @@ let convert_cond_code signed = function
   | Tacky.LessOrEqual -> if signed then Assembly.LE else Assembly.BE
   | _ -> failwith "Internal error: not a condition code"
 
-type cls = Mem | SSE | Integer
+type ParamClass = Mem | SSE | Integer
 
 let classify_new_structure tag =
   let { TypeTable.size = size } = TypeTable.find tag

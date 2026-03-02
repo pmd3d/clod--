@@ -1,6 +1,6 @@
 ﻿module Initializers
 
-type static_init =
+type StaticInit =
     | CharInit of sbyte
     | UCharInit of byte
     | IntInit of int32
@@ -13,7 +13,7 @@ type static_init =
     | StringInit of string * bool (* flag indicates whether the string is null terminated *)
     | PointerInit of string (* pointer to static variable *)
 
-let show_static_init = function
+let showStaticInit = function
     | CharInit c -> string c
     | UCharInit uc -> string uc
     | IntInit i -> string i
@@ -26,8 +26,8 @@ let show_static_init = function
         "\"" + s + (if b then "\\0" else "") + "\""
     | PointerInit s -> sprintf "&%s" s
 
-let pp_static_init (fmt: System.IO.TextWriter) si =
-    fmt.Write(show_static_init si)
+let ppStaticInit (fmt: System.IO.TextWriter) si =
+    fmt.Write(showStaticInit si)
 
 let zero t = [ ZeroInit(int (TypeUtils.getSize t)) ]
 

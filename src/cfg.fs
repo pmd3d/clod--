@@ -1,6 +1,6 @@
 ﻿module Cfg
 
-type simple_instr =
+type SimpleInstr =
     | Label of string
     | ConditionalJump of string
     | UnconditionalJump of string
@@ -8,14 +8,14 @@ type simple_instr =
     | Other
 
 [<CustomEquality; CustomComparison>]
-type node_id =
+type NodeId =
     | Entry
     | Block of int
     | Exit
 
     override this.Equals(obj) =
         match obj with
-        | :? node_id as other ->
+        | :? NodeId as other ->
             match (this, other) with
             | Entry, Entry -> true
             | Block a, Block b -> a = b
@@ -37,7 +37,7 @@ type node_id =
                 | Block _ -> 1
                 | Exit -> 2
             match obj with
-            | :? node_id as other ->
+            | :? NodeId as other ->
                 match (this, other) with
                 | Entry, Entry -> 0
                 | Exit, Exit -> 0
@@ -46,19 +46,19 @@ type node_id =
             | _ ->
                 invalidArg "obj" "Cannot compare values of different types"
 
-type basic_block<'v, 'instr> = {
-    id: node_id
+type BasicBlock<'v, 'instr> = {
+    id: NodeId
     instructions: ('v * 'instr) list
-    mutable preds: node_id list
-    mutable succs: node_id list
+    mutable preds: NodeId list
+    mutable succs: NodeId list
     value: 'v
 }
 
-type t<'v, 'instr> = {
+type ControlFlowGraph<'v, 'instr> = {
     (* store basic blocks in association list, indexed by block # *)
-    basic_blocks: (int * basic_block<'v, 'instr>) list
-    mutable entry_succs: node_id list
-    mutable exit_preds: node_id list
+    BasicBlocks: (int * BasicBlock<'v, 'instr>) list
+    mutable entry_succs: NodeId list
+    mutable exit_preds: NodeId list
     debug_label: string
 }
 
@@ -66,13 +66,13 @@ let get_succs nd_id cfg =
     match nd_id with
     | Entry -> cfg.entry_succs
     | Block n ->
-        let nd = List.find (fun (k, _) -> k = n) cfg.basic_blocks |> snd
+        let nd = List.find (fun (k, _) -> k = n) cfg.BasicBlocks |> snd
         nd.succs
     | Exit -> []
 
 let get_block_value blocknum cfg =
     let nd =
-        List.find (fun (k, _) -> k = blocknum) cfg.basic_blocks |> snd
+        List.find (fun (k, _) -> k = blocknum) cfg.BasicBlocks |> snd
     nd.value
 
 let private update_successors f nd_id g =
@@ -80,7 +80,7 @@ let private update_successors f nd_id g =
     | Entry -> g.entry_succs <- f g.entry_succs
     | Block n ->
         let blk =
-            List.find (fun (k, _) -> k = n) g.basic_blocks |> snd
+            List.find (fun (k, _) -> k = n) g.BasicBlocks |> snd
         blk.succs <- f blk.succs
     | Exit -> failwith "Internal error: malformed CFG"
 
@@ -89,7 +89,7 @@ let private update_predecessors f nd_id g =
     | Entry -> failwith "Internal error: malformed CFG"
     | Block n ->
         let blk =
-            List.find (fun (k, _) -> k = n) g.basic_blocks |> snd
+            List.find (fun (k, _) -> k = n) g.BasicBlocks |> snd
         blk.preds <- f blk.preds
     | Exit -> g.exit_preds <- f g.exit_preds
 
@@ -107,16 +107,16 @@ let remove_edge pred succ g =
     update_predecessors (remove_id pred) succ g
 
 (* replace block with given block ID *)
-let update_basic_block block_idx new_block g =
+let update_BasicBlock block_idx new_block g =
     let new_blocks =
         List.map
             (fun ((i, _) as blk) ->
                 if i = block_idx then (i, new_block) else blk)
-            g.basic_blocks
-    { g with basic_blocks = new_blocks }
+            g.BasicBlocks
+    { g with BasicBlocks = new_blocks }
 
 (* constructing the CFG *)
-let private partition_into_basic_blocks simplify instructions =
+let private partition_into_BasicBlocks simplify instructions =
     let f (finished_blocks, current_block) i =
         match simplify i with
         | Label _ ->
@@ -141,12 +141,12 @@ let private add_all_edges simplify g =
                 match simplify (snd (List.head blk.instructions)) with
                 | Label lbl -> Map.add lbl blk.id lbl_map
                 | _ -> lbl_map)
-            Map.empty g.basic_blocks
+            Map.empty g.BasicBlocks
 
     (* add outgoing edges from a single basic block *)
     let process_node (id_num, block) =
         let next_block =
-            if id_num = fst (ListUtil.last g.basic_blocks) then Exit
+            if id_num = fst (ListUtil.last g.BasicBlocks) then Exit
             else Block(id_num + 1)
         let _, last_instr = ListUtil.last block.instructions
 
@@ -162,7 +162,7 @@ let private add_all_edges simplify g =
         | _ -> add_edge block.id next_block g
 
     add_edge Entry (Block 0) g
-    List.iter process_node g.basic_blocks
+    List.iter process_node g.BasicBlocks
 
 let instructions_to_cfg simplify debug_label instructions =
     let to_node idx instructions =
@@ -174,9 +174,9 @@ let instructions_to_cfg simplify debug_label instructions =
            succs = []
            value = () })
     let cfg =
-        { basic_blocks =
+        { BasicBlocks =
               List.mapi to_node
-                  (partition_into_basic_blocks simplify instructions)
+                  (partition_into_BasicBlocks simplify instructions)
           entry_succs = []
           exit_preds = []
           debug_label = debug_label }
@@ -188,7 +188,7 @@ let instructions_to_cfg simplify debug_label instructions =
 let cfg_to_instructions g =
     let blk_to_instrs (_, { instructions = instructions }) =
         List.map snd instructions
-    List.collect blk_to_instrs g.basic_blocks
+    List.collect blk_to_instrs g.BasicBlocks
 
 (* working with annotations *)
 (* NOTE: Cannot use { x with ... } here because F# doesn't allow changing
@@ -203,7 +203,7 @@ let initialize_annotation cfg dummy_val =
            preds = b.preds
            succs = b.succs
            value = dummy_val })
-    { basic_blocks = List.map initialize_block cfg.basic_blocks
+    { BasicBlocks = List.map initialize_block cfg.BasicBlocks
       entry_succs = cfg.entry_succs
       exit_preds = cfg.exit_preds
       debug_label = cfg.debug_label }
@@ -213,14 +213,14 @@ let strip_annotations cfg = initialize_annotation cfg ()
 (* debugging *)
 let print_graphviz (pp_instr: System.IO.TextWriter -> 'instr -> unit)
                    (pp_val: System.IO.TextWriter -> 'v -> unit)
-                   (cfg: t<'v, 'instr>) =
+                   (cfg: ControlFlowGraph<'v, 'instr>) =
     let filename =
         UniqueIds.makeLabel cfg.debug_label + ".dot"
     let path =
         if System.IO.Path.IsPathRooted(filename) then filename
         else System.IO.Path.Combine(System.IO.Directory.GetCurrentDirectory(), filename)
     use writer = new System.IO.StreamWriter(path)
-    let pp_node_id (out: System.IO.TextWriter) = function
+    let pp_NodeId (out: System.IO.TextWriter) = function
         | Exit -> out.Write("exit")
         | Entry -> out.Write("entry")
         | Block n -> out.Write(sprintf "block%d" n)
@@ -237,7 +237,7 @@ let print_graphviz (pp_instr: System.IO.TextWriter -> 'instr -> unit)
     let pp_block_instructions (out: System.IO.TextWriter) blk =
         out.Write("<table>")
         out.Write("<tr><td colspan=\"2\"><b>")
-        pp_node_id out blk.id
+        pp_NodeId out blk.id
         out.Write("</b></td></tr>")
         out.WriteLine()
         List.iter (pp_annotated_instruction out) blk.instructions
@@ -251,20 +251,20 @@ let print_graphviz (pp_instr: System.IO.TextWriter -> 'instr -> unit)
         out.Write(">]")
     let pp_entry_edge (out: System.IO.TextWriter) lbl =
         out.Write("entry -> ")
-        pp_node_id out lbl
+        pp_NodeId out lbl
     let pp_edge i (out: System.IO.TextWriter) succ =
         out.Write(sprintf "block%d -> " i)
-        pp_node_id out succ
-    let pp_edges (out: System.IO.TextWriter) ((lbl: int), (blk: basic_block<'a, _>)) =
+        pp_NodeId out succ
+    let pp_edges (out: System.IO.TextWriter) ((lbl: int), (blk: BasicBlock<'a, _>)) =
         List.iter (pp_edge lbl out) blk.succs
     writer.WriteLine("digraph {")
     writer.WriteLine("  labeljust=l")
     writer.WriteLine("  node[shape=\"box\"]")
     writer.WriteLine("  entry[label=\"ENTRY\"]")
     writer.WriteLine("  exit[label=\"EXIT\"]")
-    List.iter (fun b -> pp_block writer b; writer.WriteLine()) cfg.basic_blocks
+    List.iter (fun b -> pp_block writer b; writer.WriteLine()) cfg.BasicBlocks
     List.iter (fun e -> pp_entry_edge writer e; writer.WriteLine()) cfg.entry_succs
-    List.iter (fun b -> pp_edges writer b; writer.WriteLine()) cfg.basic_blocks
+    List.iter (fun b -> pp_edges writer b; writer.WriteLine()) cfg.BasicBlocks
     writer.WriteLine("}")
     writer.Flush()
     writer.Close()
@@ -293,7 +293,7 @@ module TackyCfg =
     let get_block_value blocknum cfg = get_block_value blocknum cfg
     let add_edge pred succ g = add_edge pred succ g
     let remove_edge pred succ g = remove_edge pred succ g
-    let update_basic_block idx blk g = update_basic_block idx blk g
+    let update_BasicBlock idx blk g = update_BasicBlock idx blk g
     let initialize_annotation cfg v = initialize_annotation cfg v
     let strip_annotations cfg = strip_annotations cfg
 
@@ -313,6 +313,6 @@ module AsmCfg =
     let get_block_value blocknum cfg = get_block_value blocknum cfg
     let add_edge pred succ g = add_edge pred succ g
     let remove_edge pred succ g = remove_edge pred succ g
-    let update_basic_block idx blk g = update_basic_block idx blk g
+    let update_BasicBlock idx blk g = update_BasicBlock idx blk g
     let initialize_annotation cfg v = initialize_annotation cfg v
     let strip_annotations cfg = strip_annotations cfg

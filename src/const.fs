@@ -1,7 +1,7 @@
 ﻿module Const
 
 [<CustomEquality; CustomComparison>]
-type t =
+type ConstValue =
     | ConstChar of sbyte
     | ConstUChar of byte
     | ConstInt of int32
@@ -12,7 +12,7 @@ type t =
 
     override this.Equals(obj) =
         match obj with
-        | :? t as other ->
+        | :? ConstValue as other ->
             match (this, other) with
             | ConstChar a, ConstChar b -> a = b
             | ConstUChar a, ConstUChar b -> a = b
@@ -46,7 +46,7 @@ type t =
                 | ConstULong _ -> 5
                 | ConstDouble _ -> 6
             match obj with
-            | :? t as other ->
+            | :? ConstValue as other ->
                 match (this, other) with
                 | ConstChar a, ConstChar b -> compare a b
                 | ConstUChar a, ConstUChar b -> compare a b

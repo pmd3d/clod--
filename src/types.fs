@@ -1,6 +1,6 @@
 ﻿module Types
 
-type t =
+type CType =
     | Char
     | SChar
     | UChar
@@ -9,13 +9,13 @@ type t =
     | UInt
     | ULong
     | Double
-    | Pointer of t
+    | Pointer of CType
     | Void
-    | Array of elemType: t * size: int64
-    | FunType of paramTypes: t list * retType: t
+    | Array of elemType: CType * size: int64
+    | FunType of paramTypes: CType list * retType: CType
     | Structure of string (* tag *)
 
-let rec show (typ: t) : string =
+let rec show (typ: CType) : string =
     match typ with
     | Char -> "Char"
     | SChar -> "SChar"
@@ -39,4 +39,4 @@ let rec show (typ: t) : string =
             (show retType)
     | Structure tag -> sprintf "(Structure %s)" tag
 
-let pp (out: System.IO.TextWriter) (t: t) = out.Write(show t)
+let pp (out: System.IO.TextWriter) (t: CType) = out.Write(show t)

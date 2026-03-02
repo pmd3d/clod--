@@ -11,7 +11,7 @@ exception ParseError of string
 module Private =
 
     type Expected =
-        | Tok of T.t
+        | Tok of T.Token
         | Name of string
 
     let ppExpected =
@@ -26,8 +26,8 @@ module Private =
                 (Tokens.show actual)
         raise (ParseError msg)
 
-    let expect expected (tokens: TokStream.t) =
-        let actual = TokStream.takeToken tokens
+    let expect expected (tokens: TokStream.TokStream) =
+        let actual = TokStream.TokStreamakeToken tokens
         if actual <> expected then
             raiseError (Tok expected) actual
 
@@ -68,8 +68,8 @@ module Private =
         | T.Identifier _ -> true
         | _ -> false
 
-    let parseId (tokens: TokStream.t) =
-        match TokStream.takeToken tokens with
+    let parseId (tokens: TokStream.TokStream) =
+        match TokStream.TokStreamakeToken tokens with
         | T.Identifier x -> x
         | other -> raiseError (Name "an identifier") other
 
@@ -85,11 +85,11 @@ module Private =
         | T.KWStruct -> true
         | _ -> false
 
-    let parseTypeSpecifier (tokens: TokStream.t) =
-        let spec = TokStream.takeToken tokens
+    let parseTypeSpecifier (tokens: TokStream.TokStream) =
+        let spec = TokStream.TokStreamakeToken tokens
         match spec with
         | T.KWStruct ->
-            let expectedTag = TokStream.takeToken tokens
+            let expectedTag = TokStream.TokStreamakeToken tokens
             if isIdent expectedTag then
                 expectedTag
             else
@@ -100,7 +100,7 @@ module Private =
             else
                 raiseError (Name "a type specifier") spec
 
-    let rec parseTypeSpecifierList (tokens: TokStream.t) =
+    let rec parseTypeSpecifierList (tokens: TokStream.TokStream) =
         let spec = parseTypeSpecifier tokens
         if isTypeSpecifier (TokStream.peek tokens) then
             spec :: parseTypeSpecifierList tokens
@@ -112,17 +112,17 @@ module Private =
         | T.KWStatic | T.KWExtern -> true
         | other -> isTypeSpecifier other
 
-    let parseSpecifier (tokens: TokStream.t) =
+    let parseSpecifier (tokens: TokStream.TokStream) =
         let spec = TokStream.peek tokens
         if isTypeSpecifier spec then
             parseTypeSpecifier tokens
         else if isSpecifier spec then
-            let _ = TokStream.takeToken tokens
+            let _ = TokStream.TokStreamakeToken tokens
             spec
         else
             raiseError (Name "a type or storage-class specifier") spec
 
-    let rec parseSpecifierList (tokens: TokStream.t) =
+    let rec parseSpecifierList (tokens: TokStream.TokStream) =
         let spec = parseSpecifier tokens
         if isSpecifier (TokStream.peek tokens) then
             spec :: parseSpecifierList tokens
@@ -223,8 +223,8 @@ module Private =
         else
             raise (ParseError "multi-character constant tokens not supported")
 
-    let parseConst (tokens: TokStream.t) =
-        let constTok = TokStream.takeToken tokens
+    let parseConst (tokens: TokStream.TokStream) =
+        let constTok = TokStream.TokStreamakeToken tokens
         match constTok with
         | T.ConstInt _ | T.ConstLong _ -> parseSignedConstant constTok
         | T.ConstUInt _ | T.ConstULong _ -> parseUnsignedConstant constTok
@@ -232,7 +232,7 @@ module Private =
         | T.ConstChar c -> parseChar c
         | other -> raiseError (Name "a constant token") other
 
-    let parseDim (tokens: TokStream.t) =
+    let parseDim (tokens: TokStream.TokStream) =
         expect T.OpenBracket tokens
         let dim =
             match parseConst tokens with
@@ -247,8 +247,8 @@ module Private =
         expect T.CloseBracket tokens
         dim
 
-    let parseString (tokens: TokStream.t) =
-        match TokStream.takeToken tokens with
+    let parseString (tokens: TokStream.TokStream) =
+        match TokStream.TokStreamakeToken tokens with
         | T.StringLiteral s -> unescape s
         | other -> raiseError (Name "a string literal") other
 
@@ -257,7 +257,7 @@ module Private =
         | AbstractArray of AbstractDeclarator * int64
         | AbstractBase
 
-    let rec parseAbstractArrayDeclSuffix baseDecl (tokens: TokStream.t) =
+    let rec parseAbstractArrayDeclSuffix baseDecl (tokens: TokStream.TokStream) =
         let dim = parseDim tokens
         let newDecl = AbstractArray(baseDecl, dim)
         if TokStream.peek tokens = T.OpenBracket then
@@ -265,10 +265,10 @@ module Private =
         else
             newDecl
 
-    let rec parseAbstractDeclarator (tokens: TokStream.t) =
+    let rec parseAbstractDeclarator (tokens: TokStream.TokStream) =
         match TokStream.peek tokens with
         | T.Star ->
-            let _ = TokStream.takeToken tokens
+            let _ = TokStream.TokStreamakeToken tokens
             let inner =
                 match TokStream.peek tokens with
                 | T.Star | T.OpenParen | T.OpenBracket ->
@@ -277,9 +277,9 @@ module Private =
             AbstractPointer inner
         | _ -> parseDirectAbstractDeclarator tokens
 
-    and parseDirectAbstractDeclarator (tokens: TokStream.t) =
+    and parseDirectAbstractDeclarator (tokens: TokStream.TokStream) =
         if TokStream.peek tokens = T.OpenParen then
-            let _ = TokStream.takeToken tokens
+            let _ = TokStream.TokStreamakeToken tokens
             let decl = parseAbstractDeclarator tokens
             expect T.CloseParen tokens
             if TokStream.peek tokens = T.OpenBracket then
@@ -312,15 +312,15 @@ module Private =
         | T.EqualSign -> Some 1
         | _ -> None
 
-    let parseUnop (tokens: TokStream.t) =
-        match TokStream.takeToken tokens with
+    let parseUnop (tokens: TokStream.TokStream) =
+        match TokStream.TokStreamakeToken tokens with
         | T.Tilde -> Ast.UnaryOperator.Complement
         | T.Hyphen -> Ast.UnaryOperator.Negate
         | T.Bang -> Ast.UnaryOperator.Not
         | other -> raiseError (Name "a unary operator") other
 
-    let parseBinop (tokens: TokStream.t) =
-        match TokStream.takeToken tokens with
+    let parseBinop (tokens: TokStream.TokStream) =
+        match TokStream.TokStreamakeToken tokens with
         | T.Plus -> Ast.BinaryOperator.Add
         | T.Hyphen -> Ast.BinaryOperator.Subtract
         | T.Star -> Ast.BinaryOperator.Multiply
@@ -336,7 +336,7 @@ module Private =
         | T.GreaterOrEqual -> Ast.BinaryOperator.GreaterOrEqual
         | other -> raiseError (Name "a binary operator") other
 
-    let parseTypeName (tokens: TokStream.t) =
+    let parseTypeName (tokens: TokStream.TokStream) =
         let typeSpecifiers = parseTypeSpecifierList tokens
         let baseType = parseType typeSpecifiers
         match TokStream.peek tokens with
@@ -345,7 +345,7 @@ module Private =
             let abstractDecl = parseAbstractDeclarator tokens
             processAbstractDeclarator abstractDecl baseType
 
-    let rec parsePrimaryExp (tokens: TokStream.t) =
+    let rec parsePrimaryExp (tokens: TokStream.TokStream) =
         let nextToken = TokStream.peek tokens
         match nextToken with
         | T.ConstInt _
@@ -357,7 +357,7 @@ module Private =
         | T.Identifier _ ->
             let id = parseId tokens
             if TokStream.peek tokens = T.OpenParen then
-                let _ = TokStream.takeToken tokens
+                let _ = TokStream.TokStreamakeToken tokens
                 let args =
                     if TokStream.peek tokens = T.CloseParen then
                         []
@@ -368,7 +368,7 @@ module Private =
             else
                 Ast.Exp.Var id
         | T.OpenParen ->
-            let _ = TokStream.takeToken tokens
+            let _ = TokStream.TokStreamakeToken tokens
             let e = parseExp 0 tokens
             expect T.CloseParen tokens
             e
@@ -381,32 +381,32 @@ module Private =
             Ast.Exp.String(parseStringLoop ())
         | t -> raiseError (Name "a primary expression") t
 
-    and parseArgumentList (tokens: TokStream.t) =
+    and parseArgumentList (tokens: TokStream.TokStream) =
         let arg = parseExp 0 tokens
         if TokStream.peek tokens = T.Comma then
-            let _ = TokStream.takeToken tokens
+            let _ = TokStream.TokStreamakeToken tokens
             arg :: parseArgumentList tokens
         else
             [ arg ]
 
-    and parsePostfixExp (tokens: TokStream.t) =
+    and parsePostfixExp (tokens: TokStream.TokStream) =
         let primary = parsePrimaryExp tokens
 
         let rec postfixLoop e =
             match TokStream.peek tokens with
             | T.OpenBracket ->
-                let _ = TokStream.takeToken tokens
+                let _ = TokStream.TokStreamakeToken tokens
                 let subscript = parseExp 0 tokens
                 let () = expect T.CloseBracket tokens
                 let subscriptExp = Ast.Exp.Subscript(e, subscript)
                 postfixLoop subscriptExp
             | T.Dot ->
-                let _ = TokStream.takeToken tokens
+                let _ = TokStream.TokStreamakeToken tokens
                 let ``member`` = parseId tokens
                 let dotExp = Ast.Exp.Dot(e, ``member``)
                 postfixLoop dotExp
             | T.Arrow ->
-                let _ = TokStream.takeToken tokens
+                let _ = TokStream.TokStreamakeToken tokens
                 let ``member`` = parseId tokens
                 let arrowExp = Ast.Exp.Arrow(e, ``member``)
                 postfixLoop arrowExp
@@ -414,14 +414,14 @@ module Private =
 
         postfixLoop primary
 
-    and parseUnaryExp (tokens: TokStream.t) =
+    and parseUnaryExp (tokens: TokStream.TokStream) =
         match TokStream.npeek 3 tokens with
         | T.Star :: _ ->
-            let _ = TokStream.takeToken tokens
+            let _ = TokStream.TokStreamakeToken tokens
             let innerExp = parseCastExp tokens
             Ast.Exp.Dereference innerExp
         | T.Ampersand :: _ ->
-            let _ = TokStream.takeToken tokens
+            let _ = TokStream.TokStreamakeToken tokens
             let innerExp = parseCastExp tokens
             Ast.Exp.AddrOf innerExp
         | (T.Hyphen | T.Tilde | T.Bang) :: _ ->
@@ -429,34 +429,34 @@ module Private =
             let innerExp = parseCastExp tokens
             Ast.Exp.Unary(operator, innerExp)
         | [ T.KWSizeOf; T.OpenParen; t ] when isTypeSpecifier t ->
-            let _ = TokStream.takeToken tokens
-            let _ = TokStream.takeToken tokens
+            let _ = TokStream.TokStreamakeToken tokens
+            let _ = TokStream.TokStreamakeToken tokens
             let typ = parseTypeName tokens
             expect T.CloseParen tokens
             Ast.Exp.SizeOfT typ
         | T.KWSizeOf :: _ ->
-            let _ = TokStream.takeToken tokens
+            let _ = TokStream.TokStreamakeToken tokens
             let innerExp = parseUnaryExp tokens
             Ast.Exp.SizeOf innerExp
         | _ -> parsePostfixExp tokens
 
-    and parseCastExp (tokens: TokStream.t) =
+    and parseCastExp (tokens: TokStream.TokStream) =
         match TokStream.npeek 2 tokens with
         | [ T.OpenParen; t ] when isTypeSpecifier t ->
-            let _ = TokStream.takeToken tokens
+            let _ = TokStream.TokStreamakeToken tokens
             let targetType = parseTypeName tokens
             let _ = expect T.CloseParen tokens
             let innerExp = parseCastExp tokens
             Ast.Exp.Cast(targetType, innerExp)
         | _ -> parseUnaryExp tokens
 
-    and parseConditionalMiddle (tokens: TokStream.t) =
+    and parseConditionalMiddle (tokens: TokStream.TokStream) =
         expect T.QuestionMark tokens
         let e = parseExp 0 tokens
         expect T.Colon tokens
         e
 
-    and parseExp minPrec (tokens: TokStream.t) =
+    and parseExp minPrec (tokens: TokStream.TokStream) =
         let initialFactor = parseCastExp tokens
         let nextToken = TokStream.peek tokens
 
@@ -465,7 +465,7 @@ module Private =
             | Some prec when prec >= minPrec ->
                 let left =
                     if next = T.EqualSign then
-                        let _ = TokStream.takeToken tokens
+                        let _ = TokStream.TokStreamakeToken tokens
                         let right = parseExp prec tokens
                         Ast.Exp.Assignment(left, right)
                     else if next = T.QuestionMark then
@@ -481,9 +481,9 @@ module Private =
 
         parseExpLoop initialFactor nextToken
 
-    let parseOptionalExp delim (tokens: TokStream.t) =
+    let parseOptionalExp delim (tokens: TokStream.TokStream) =
         if TokStream.peek tokens = delim then
-            let _ = TokStream.takeToken tokens
+            let _ = TokStream.TokStreamakeToken tokens
             None
         else
             let e = parseExp 0 tokens
@@ -496,9 +496,9 @@ module Private =
         | ArrayDeclarator of Declarator * int64
         | FunDeclarator of ParamInfo list * Declarator
 
-    and ParamInfo = Param of Types.t * Declarator
+    and ParamInfo = Param of Types.CType * Declarator
 
-    let rec parseArrayDeclSuffix baseDecl (tokens: TokStream.t) =
+    let rec parseArrayDeclSuffix baseDecl (tokens: TokStream.TokStream) =
         let dim = parseDim tokens
         let newDecl = ArrayDeclarator(baseDecl, dim)
         if TokStream.peek tokens = T.OpenBracket then
@@ -506,15 +506,15 @@ module Private =
         else
             newDecl
 
-    let rec parseDeclarator (tokens: TokStream.t) =
+    let rec parseDeclarator (tokens: TokStream.TokStream) =
         match TokStream.peek tokens with
         | T.Star ->
-            let _ = TokStream.takeToken tokens
+            let _ = TokStream.TokStreamakeToken tokens
             let inner = parseDeclarator tokens
             PointerDeclarator inner
         | _ -> parseDirectDeclarator tokens
 
-    and parseDirectDeclarator (tokens: TokStream.t) =
+    and parseDirectDeclarator (tokens: TokStream.TokStream) =
         let simpleDec = parseSimpleDeclarator tokens
         match TokStream.peek tokens with
         | T.OpenParen ->
@@ -523,18 +523,18 @@ module Private =
         | T.OpenBracket -> parseArrayDeclSuffix simpleDec tokens
         | _ -> simpleDec
 
-    and parseParamList (tokens: TokStream.t) =
+    and parseParamList (tokens: TokStream.TokStream) =
         if TokStream.npeek 3 tokens = [ T.OpenParen; T.KWVoid; T.CloseParen ] then
-            let _ = TokStream.takeToken tokens
-            let _ = TokStream.takeToken tokens
-            let _ = TokStream.takeToken tokens
+            let _ = TokStream.TokStreamakeToken tokens
+            let _ = TokStream.TokStreamakeToken tokens
+            let _ = TokStream.TokStreamakeToken tokens
             []
         else
             let _ = expect T.OpenParen tokens
             let rec paramLoop () =
                 let nextParam = parseParam tokens
                 if TokStream.peek tokens = T.Comma then
-                    let _ = TokStream.takeToken tokens
+                    let _ = TokStream.TokStreamakeToken tokens
                     nextParam :: paramLoop ()
                 else
                     [ nextParam ]
@@ -542,13 +542,13 @@ module Private =
             let _ = expect T.CloseParen tokens
             ``params``
 
-    and parseParam (tokens: TokStream.t) =
+    and parseParam (tokens: TokStream.TokStream) =
         let paramT = parseType (parseTypeSpecifierList tokens)
         let paramDecl = parseDeclarator tokens
         Param(paramT, paramDecl)
 
-    and parseSimpleDeclarator (tokens: TokStream.t) =
-        let nextTok = TokStream.takeToken tokens
+    and parseSimpleDeclarator (tokens: TokStream.TokStream) =
+        let nextTok = TokStream.TokStreamakeToken tokens
         match nextTok with
         | T.OpenParen ->
             let decl = parseDeclarator tokens
@@ -586,17 +586,17 @@ module Private =
                 (ParseError
                     "can't apply additional type derivations to a function declarator")
 
-    let rec parseInitializer (tokens: TokStream.t) =
+    let rec parseInitializer (tokens: TokStream.TokStream) =
         if TokStream.peek tokens = T.OpenBrace then
-            let _ = TokStream.takeToken tokens
+            let _ = TokStream.TokStreamakeToken tokens
             let rec parseInitLoop () =
                 let nextInit = parseInitializer tokens
                 match TokStream.npeek 2 tokens with
                 | [ T.Comma; T.CloseBrace ] ->
-                    let _ = TokStream.takeToken tokens
+                    let _ = TokStream.TokStreamakeToken tokens
                     [ nextInit ]
                 | T.Comma :: _ ->
-                    let _ = TokStream.takeToken tokens
+                    let _ = TokStream.TokStreamakeToken tokens
                     nextInit :: parseInitLoop ()
                 | _ -> [ nextInit ]
             let initList = parseInitLoop ()
@@ -605,7 +605,7 @@ module Private =
         else
             Ast.Initializer.SingleInit(parseExp 0 tokens)
 
-    let parseMemberDeclaration (tokens: TokStream.t) =
+    let parseMemberDeclaration (tokens: TokStream.TokStream) =
         let specifiers = parseTypeSpecifierList tokens
         let baseType = parseType specifiers
         let decl = parseDeclarator tokens
@@ -619,13 +619,13 @@ module Private =
             { memberName = memberName
               memberType = memberType } : Ast.MemberDeclaration
 
-    let parseStructDeclaration (tokens: TokStream.t) =
+    let parseStructDeclaration (tokens: TokStream.TokStream) =
         expect T.KWStruct tokens
         let tag = parseId tokens
         let members =
             match TokStream.peek tokens with
             | T.OpenBrace ->
-                let _ = TokStream.takeToken tokens
+                let _ = TokStream.TokStreamakeToken tokens
                 let rec parseMemberLoop () =
                     let nextMember = parseMemberDeclaration tokens
                     if TokStream.peek tokens = T.CloseBrace then
@@ -640,7 +640,7 @@ module Private =
         { tag = tag
           members = members } : Ast.StructDeclaration
 
-    let rec parseFunctionOrVariableDeclaration (tokens: TokStream.t) =
+    let rec parseFunctionOrVariableDeclaration (tokens: TokStream.TokStream) =
         let specifiers = parseSpecifierList tokens
         let baseType, storageClass = parseTypeAndStorageClass specifiers
         let decl = parseDeclarator tokens
@@ -650,7 +650,7 @@ module Private =
             let body =
                 match TokStream.peek tokens with
                 | T.Semicolon ->
-                    let _ = TokStream.takeToken tokens
+                    let _ = TokStream.TokStreamakeToken tokens
                     None
                 | _ -> Some(parseBlock tokens)
             Ast.FunDecl
@@ -662,7 +662,7 @@ module Private =
         | _ ->
             let init =
                 if TokStream.peek tokens = T.EqualSign then
-                    let _ = TokStream.takeToken tokens
+                    let _ = TokStream.TokStreamakeToken tokens
                     Some(parseInitializer tokens)
                 else
                     None
@@ -673,13 +673,13 @@ module Private =
                   storageClass = storageClass
                   init = init }
 
-    and parseDeclaration (tokens: TokStream.t) =
+    and parseDeclaration (tokens: TokStream.TokStream) =
         match TokStream.npeek 3 tokens with
         | [ T.KWStruct; T.Identifier _; (T.OpenBrace | T.Semicolon) ] ->
             Ast.StructDecl(parseStructDeclaration tokens)
         | _ -> parseFunctionOrVariableDeclaration tokens
 
-    and parseForInit (tokens: TokStream.t) =
+    and parseForInit (tokens: TokStream.TokStream) =
         if isSpecifier (TokStream.peek tokens) then
             match parseDeclaration tokens with
             | Ast.VarDecl vd -> Ast.InitDecl vd
@@ -691,36 +691,36 @@ module Private =
             let optE = parseOptionalExp T.Semicolon tokens
             Ast.InitExp optE
 
-    and parseStatement (tokens: TokStream.t) =
+    and parseStatement (tokens: TokStream.TokStream) =
         match TokStream.peek tokens with
         | T.KWReturn ->
-            let _ = TokStream.takeToken tokens
+            let _ = TokStream.TokStreamakeToken tokens
             let optExp = parseOptionalExp T.Semicolon tokens
             Ast.Return optExp
         | T.KWIf ->
-            let _ = TokStream.takeToken tokens
+            let _ = TokStream.TokStreamakeToken tokens
             expect T.OpenParen tokens
             let condition = parseExp 0 tokens
             expect T.CloseParen tokens
             let thenClause = parseStatement tokens
             let elseClause =
                 if TokStream.peek tokens = T.KWElse then
-                    let _ = TokStream.takeToken tokens
+                    let _ = TokStream.TokStreamakeToken tokens
                     Some(parseStatement tokens)
                 else
                     None
             Ast.If(condition, thenClause, elseClause)
         | T.OpenBrace -> Ast.Compound(parseBlock tokens)
         | T.KWBreak ->
-            let _ = TokStream.takeToken tokens
+            let _ = TokStream.TokStreamakeToken tokens
             expect T.Semicolon tokens
             Ast.Break ""
         | T.KWContinue ->
-            let _ = TokStream.takeToken tokens
+            let _ = TokStream.TokStreamakeToken tokens
             expect T.Semicolon tokens
             Ast.Continue ""
         | T.KWWhile ->
-            let _ = TokStream.takeToken tokens
+            let _ = TokStream.TokStreamakeToken tokens
             expect T.OpenParen tokens
             let condition = parseExp 0 tokens
             expect T.CloseParen tokens
@@ -749,13 +749,13 @@ module Private =
             | Some e -> Ast.Expression e
             | None -> Ast.Null
 
-    and parseBlockItem (tokens: TokStream.t) =
+    and parseBlockItem (tokens: TokStream.TokStream) =
         if isSpecifier (TokStream.peek tokens) then
             Ast.Decl(parseDeclaration tokens)
         else
             Ast.Stmt(parseStatement tokens)
 
-    and parseBlock (tokens: TokStream.t) =
+    and parseBlock (tokens: TokStream.TokStream) =
         expect T.OpenBrace tokens
         let rec parseBlockItemLoop () =
             if TokStream.peek tokens = T.CloseBrace then
@@ -767,7 +767,7 @@ module Private =
         expect T.CloseBrace tokens
         Ast.Block block
 
-    let parseProgram (tokens: TokStream.t) =
+    let parseProgram (tokens: TokStream.TokStream) =
         let rec parseDeclLoop () =
             if TokStream.isEmpty tokens then
                 []

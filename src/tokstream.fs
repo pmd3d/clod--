@@ -1,14 +1,14 @@
-﻿module TokStream
+module TokStream
 
-type t = Tokens.t Stream.t
+type TokStream = Tokens.Token Stream.Stream
 
 exception End_of_stream
 
-let takeToken (tokens: t) =
+let takeToken (tokens: TokStream) =
     try Stream.next tokens
     with Stream.Failure -> raise End_of_stream
 
-let peek (tokens: t) =
+let peek (tokens: TokStream) =
     match Stream.peek tokens with
     (* non-empty stream *)
     | Some t -> t
@@ -17,7 +17,7 @@ let peek (tokens: t) =
 
 let npeek = Stream.npeek
 
-let isEmpty (tokens: t) =
+let isEmpty (tokens: TokStream) =
     try
         Stream.empty tokens
         true

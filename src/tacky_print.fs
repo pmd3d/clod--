@@ -16,9 +16,9 @@ let pp_print_list (pp_sep: System.IO.TextWriter -> unit)
 
 let comma_sep (out: System.IO.TextWriter) = write out ", "
 
-let pp_init_list (out: System.IO.TextWriter) (init_list: Initializers.static_init list) =
+let pp_init_list (out: System.IO.TextWriter) (init_list: Initializers.StaticInit list) =
     write out "{"
-    pp_print_list comma_sep Initializers.pp_static_init out init_list
+    pp_print_list comma_sep Initializers.ppStaticInit out init_list
     write out "}"
 
 let pp_unary_operator (out: System.IO.TextWriter) = function
@@ -203,7 +203,7 @@ let pp_tl (escape_brackets: bool) (out: System.IO.TextWriter) = function
         write out "const "
         Types.pp out t
         write out (sprintf " %s = " name)
-        Initializers.pp_static_init out init
+        Initializers.ppStaticInit out init
 
 let pp_program (escape_brackets: bool) (out: System.IO.TextWriter) (Program tls) =
     pp_print_list

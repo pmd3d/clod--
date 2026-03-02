@@ -73,12 +73,12 @@ let eval_size t =
     T.Constant(Const.ConstULong(uint64 size))
 
 (* an expression result that may or may not be lvalue converted *)
-type exp_result =
+type ExpResult =
     | PlainOperand of T.TackyVal
     | DereferencedPointer of T.TackyVal
     | SubObject of string * int
 
-(* return list of instructions to evaluate expression and resulting exp_result
+(* return list of instructions to evaluate expression and resulting ExpResult
    value as a pair *)
 let rec emit_tacky_for_exp (exp: Ast.Exp) =
     let e = exp.e

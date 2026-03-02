@@ -9,7 +9,7 @@ exception LexError of string
 type TokenDef =
     { re: Regex
       group: int
-      converter: string -> Tokens.t }
+      converter: string -> Tokens.Token }
 
 type MatchDef =
     { matchedSubstring: string
@@ -69,7 +69,7 @@ let convertString s =
     T.StringLiteral str
 
 let tokenDefs =
-    let def (group: int) (reStr: string) (converter: string -> Tokens.t) =
+    let def (group: int) (reStr: string) (converter: string -> Tokens.Token) =
         { re = Regex(@"\A" + reStr, RegexOptions.None)
           group = group
           converter = converter }

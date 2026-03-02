@@ -13,7 +13,7 @@ type AsmFunEntry = {
     return_on_stack: bool
     param_regs: Assembly.AsmReg list
     return_regs: Assembly.AsmReg list
-    callee_saved_regs_used: Reg_set.t
+    callee_saved_regs_used: Reg_set.RegSet
 }
 
 type AsmObjEntry = {

@@ -2,7 +2,7 @@
 
 type InitialValue =
     | Tentative
-    | Initial of Initializers.static_init list
+    | Initial of Initializers.StaticInit list
     | NoInitializer
 
 type FunAttr = { defined: bool; ``global``: bool }
@@ -11,22 +11,22 @@ type StaticAttr = { init: InitialValue; ``global``: bool }
 type IdentifierAttrs =
     | FunAttr of FunAttr
     | StaticAttr of StaticAttr
-    | ConstAttr of Initializers.static_init
+    | ConstAttr of Initializers.StaticInit
     | LocalAttr
 
-type SymbolEntry = { symType: Types.t; attrs: IdentifierAttrs }
+type SymbolEntry = { symType: Types.CType; attrs: IdentifierAttrs }
 
 let symbol_table = System.Collections.Generic.Dictionary<string, SymbolEntry>()
 
 // always use replace instead of add; we want to remove old binding when we add a new one
 
-let add_automatic_var name (t: Types.t) =
+let add_automatic_var name (t: Types.CType) =
     symbol_table.[name] <- { symType = t; attrs = LocalAttr }
 
-let add_static_var name (t: Types.t) (``global``: bool) (init: InitialValue) =
+let add_static_var name (t: Types.CType) (``global``: bool) (init: InitialValue) =
     symbol_table.[name] <- { symType = t; attrs = StaticAttr { init = init; ``global`` = ``global`` } }
 
-let add_fun name (t: Types.t) (``global``: bool) (defined: bool) =
+let add_fun name (t: Types.CType) (``global``: bool) (defined: bool) =
     symbol_table.[name] <- { symType = t; attrs = FunAttr { ``global`` = ``global``; defined = defined } }
 
 let get name = symbol_table.[name]

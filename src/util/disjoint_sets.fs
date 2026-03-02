@@ -1,17 +1,17 @@
 ﻿module DisjointSets
 
-type t<'a when 'a: comparison> = Map<'a, 'a>
+type DisjointSet<'a when 'a: comparison> = Map<'a, 'a>
 
-let init<'a when 'a: comparison> : t<'a> = Map.empty
+let iniDisjointSet<'a when 'a: comparison> : DisjointSet<'a> = Map.empty
 
-let union (x: 'a) (y: 'a) (disjSets: t<'a>) : t<'a> =
+let union (x: 'a) (y: 'a) (disjSets: DisjointSet<'a>) : DisjointSet<'a> =
     Map.add x y disjSets
 
-let rec find (x: 'a) (disjSets: t<'a>) : 'a =
+let rec find (x: 'a) (disjSets: DisjointSet<'a>) : 'a =
     if Map.containsKey x disjSets then
         let mappedTo = Map.find x disjSets
         find mappedTo disjSets
     else
         x
 
-let isEmpty (disjSets: t<'a>) : bool = Map.isEmpty disjSets
+let isEmpty (disjSets: DisjointSet<'a>) : bool = Map.isEmpty disjSets

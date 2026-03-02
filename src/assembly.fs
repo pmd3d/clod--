@@ -122,13 +122,13 @@ type AsmStaticVariableDef = {
     name: string
     alignment: int
     ``global``: bool
-    init: Initializers.static_init list
+    init: Initializers.StaticInit list
 }
 
 type AsmStaticConstantDef = {
     name: string
     alignment: int
-    init: Initializers.static_init
+    init: Initializers.StaticInit
 }
 
 type AsmTopLevel =

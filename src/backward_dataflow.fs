@@ -1,8 +1,8 @@
 ﻿module Backward_dataflow
 
-type annotation<'varSet> = 'varSet
-type annotated_block<'a, 'block> = Cfg.basic_block<'a, 'block>
-type annotated_graph<'a, 'block> = Cfg.t<'a, 'block>
+type Annotation<'varSet> = 'varSet
+type AnnotatedBlock<'a, 'block> = Cfg.BasicBlock<'a, 'block>
+type AnnotatedGraph<'a, 'block> = Cfg.ControlFlowGraph<'a, 'block>
 
 let debug_print (extra_tag: string) (pp_var: System.IO.TextWriter -> 'var -> unit)
                 (elements: 'varSet -> 'var list)
@@ -28,7 +28,7 @@ let analyze (pp_var: System.IO.TextWriter -> 'var -> unit)
             (initialize_annotation: 'cfg0 -> 'varSet -> 'cfg)
             (update_basic_block: int -> 'block -> 'cfg -> 'cfg)
             (get_value: 'block -> 'varSet)
-            (get_preds: 'block -> Cfg.node_id list)
+            (get_preds: 'block -> Cfg.NodeId list)
             (get_basic_blocks: 'cfg -> (int * 'block) list)
             (get_debug_label: 'cfg -> string)
             (set_debug_label: string -> 'cfg -> 'cfg)

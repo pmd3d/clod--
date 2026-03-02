@@ -24,7 +24,7 @@ let const_compare a b =
     | _ -> compare a b
 
 type TackyVal =
-    | Constant of Const.t
+    | Constant of Const.ConstValue
     | Var of string
 
 let show_tacky_val = function Constant c -> Const.show c | Var v -> v
@@ -34,7 +34,7 @@ let pp_tacky_val (fmt: System.IO.TextWriter) v = fmt.Write(show_tacky_val v)
 let type_of_val = function
     // note: this reports the type of ConstChar as SChar instead of Char, doesn't
     // matter in this context
-    | Constant c -> Const.type_of_const c
+    | Constant c -> Const.ConstValueype_of_const c
     | Var v -> (Symbols.get v).symType
 
 type TackySrcDst = { src: TackyVal; dst: TackyVal }
@@ -94,15 +94,15 @@ type TackyFunctionDef = {
 
 type TackyStaticVariableDef = {
     name: string
-    t: Types.t
+    t: Types.CType
     ``global``: bool
-    init: Initializers.static_init list
+    init: Initializers.StaticInit list
 }
 
 type TackyStaticConstantDef = {
     name: string
-    t: Types.t
-    init: Initializers.static_init
+    t: Types.CType
+    init: Initializers.StaticInit
 }
 
 type TackyTopLevel =

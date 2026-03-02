@@ -2,7 +2,7 @@
 
 open System.Numerics
 
-type t =
+type Token =
     (* tokens with contents *)
     | Identifier of string
     | StringLiteral of string
@@ -64,7 +64,7 @@ type t =
     | Dot
     | Arrow
 
-let show (tok: t) : string =
+let show (tok: Token) : string =
     match tok with
     | Identifier s -> sprintf "(Identifier %s)" s
     | StringLiteral s -> sprintf "(StringLiteral %s)" s
@@ -124,7 +124,7 @@ let show (tok: t) : string =
     | Dot -> "Dot"
     | Arrow -> "Arrow"
 
-let equal (a: t) (b: t) : bool = a = b
+let equal (a: Token) (b: Token) : bool = a = b
 
-let compare (a: t) (b: t) : int =
+let compare (a: Token) (b: Token) : int =
     Operators.compare a b

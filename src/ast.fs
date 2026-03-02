@@ -28,10 +28,10 @@ module UntypedExp =
     open Ops
 
     type Exp =
-        | Constant of Const.t
+        | Constant of Const.ConstValue
         | Var of string
         | String of string
-        | Cast of targetType: Types.t * e: Exp
+        | Cast of targetType: Types.CType * e: Exp
         | Unary of UnaryOperator * Exp
         | Binary of BinaryOperator * Exp * Exp
         | Assignment of Exp * Exp
@@ -41,7 +41,7 @@ module UntypedExp =
         | AddrOf of Exp
         | Subscript of ptr: Exp * index: Exp
         | SizeOf of Exp
-        | SizeOfT of Types.t
+        | SizeOfT of Types.CType
         | Dot of strct: Exp * ``member``: string
         | Arrow of strct: Exp * ``member``: string
 
@@ -54,10 +54,10 @@ module TypedExp =
     open Ops
 
     type InnerExp =
-        | Constant of Const.t
+        | Constant of Const.ConstValue
         | Var of string
         | String of string
-        | Cast of targetType: Types.t * e: Exp
+        | Cast of targetType: Types.CType * e: Exp
         | Unary of UnaryOperator * Exp
         | Binary of BinaryOperator * Exp * Exp
         | Assignment of Exp * Exp
@@ -67,15 +67,15 @@ module TypedExp =
         | AddrOf of Exp
         | Subscript of ptr: Exp * index: Exp
         | SizeOf of Exp
-        | SizeOfT of Types.t
+        | SizeOfT of Types.CType
         | Dot of strct: Exp * ``member``: string
         | Arrow of strct: Exp * ``member``: string
 
-    and Exp = { e: InnerExp; t: Types.t }
+    and Exp = { e: InnerExp; t: Types.CType }
 
     type Initializer =
         | SingleInit of Exp
-        | CompoundInit of Types.t * Initializer list
+        | CompoundInit of Types.CType * Initializer list
 
 module StorageClass =
     type Kind =
@@ -96,7 +96,7 @@ module Untyped =
 
     type MemberDeclaration =
         { memberName: string
-          memberType: Types.t }
+          memberType: Types.CType }
 
     type StructDeclaration =
         { tag: string
@@ -104,7 +104,7 @@ module Untyped =
 
     type VariableDeclaration =
         { name: string
-          varType: Types.t
+          varType: Types.CType
           init: Initializer option
           storageClass: StorageClass option }
 
@@ -137,7 +137,7 @@ module Untyped =
 
     and FunctionDeclaration =
         { name: string
-          funType: Types.t
+          funType: Types.CType
           ``params``: string list
           body: Block option
           storageClass: StorageClass option }
@@ -164,7 +164,7 @@ module Typed =
 
     type MemberDeclaration =
         { memberName: string
-          memberType: Types.t }
+          memberType: Types.CType }
 
     type StructDeclaration =
         { tag: string
@@ -172,7 +172,7 @@ module Typed =
 
     type VariableDeclaration =
         { name: string
-          varType: Types.t
+          varType: Types.CType
           init: Initializer option
           storageClass: StorageClass option }
 
@@ -205,7 +205,7 @@ module Typed =
 
     and FunctionDeclaration =
         { name: string
-          funType: Types.t
+          funType: Types.CType
           ``params``: string list
           body: Block option
           storageClass: StorageClass option }
