@@ -3,16 +3,16 @@
 open Ast.Untyped
 open Types
 
-type var_entry = {
+type ResolvedVar = {
     unique_name: string
     from_current_scope: bool
     has_linkage: bool
 }
 
-type struct_entry = { unique_tag: string; struct_from_current_scope: bool }
+type ResolvedStruct = { unique_tag: string; struct_from_current_scope: bool }
 
 // F#'s Map.map takes (key -> value -> value), unlike OCaml's which takes (value -> value)
-let copy_identifier_map (m: Map<string, var_entry>) =
+let copy_identifier_map (m: Map<string, ResolvedVar>) =
     Map.map (fun _ entry -> { entry with from_current_scope = false }) m
 
 let copy_struct_map m =
@@ -103,9 +103,9 @@ let resolve_local_var_helper id_map name storage_class =
     (new_map, entry.unique_name)
 
 let rec resolve_initializer struct_map id_map = function
-    | Initializr.SingleInit e -> Initializr.SingleInit (resolve_exp struct_map id_map e)
-    | Initializr.CompoundInit inits ->
-        Initializr.CompoundInit (List.map (resolve_initializer struct_map id_map) inits)
+    | Initializer.SingleInit e -> Initializer.SingleInit (resolve_exp struct_map id_map e)
+    | Initializer.CompoundInit inits ->
+        Initializer.CompoundInit (List.map (resolve_initializer struct_map id_map) inits)
 
 let resolve_local_var_declaration struct_map id_map
         { name = name; varType = var_type; init = init; storageClass = storage_class } =
@@ -166,13 +166,13 @@ let rec resolve_statement struct_map id_map = function
     | (Null | Break _ | Continue _) as s -> s
 
 and resolve_block_item (struct_map, id_map) = function
-    | S s ->
+    | Stmt s ->
         let resolved_s = resolve_statement struct_map id_map s
-        ((struct_map, id_map), S resolved_s)
-    | D d ->
+        ((struct_map, id_map), Stmt resolved_s)
+    | Decl d ->
         let new_maps, resolved_d =
             resolve_local_declaration struct_map id_map d
-        (new_maps, D resolved_d)
+        (new_maps, Decl resolved_d)
 
 and resolve_block struct_map id_map (Block items) =
     let _final_maps, resolved_items =

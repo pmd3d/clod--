@@ -35,7 +35,7 @@ let type_of_val = function
     // note: this reports the type of ConstChar as SChar instead of Char, doesn't
     // matter in this context
     | Constant c -> Const.type_of_const c
-    | Var v -> (Symbols.get v).t
+    | Var v -> (Symbols.get v).symType
 
 type TackySrcDst = { src: TackyVal; dst: TackyVal }
 

@@ -4,15 +4,15 @@ open System.Collections.Generic
 
 (* structure type definitions *)
 
-type member_entry = { member_type: Types.t; offset: int }
+type MemberDef = { member_type: Types.t; offset: int }
 
-type struct_entry = {
+type StructDef = {
     alignment: int
     size: int
-    members: Map<string, member_entry>
+    members: Map<string, MemberDef>
 }
 
-let type_table: Dictionary<string, struct_entry> = Dictionary<string, struct_entry>(20)
+let type_table: Dictionary<string, StructDef> = Dictionary<string, StructDef>(20)
 
 let add_struct_definition tag struct_def =
     type_table.[tag] <- struct_def

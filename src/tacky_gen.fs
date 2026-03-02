@@ -411,27 +411,27 @@ let rec emit_string_init dst offset (s: byte[]) =
         instr :: emit_string_init dst (offset + 1) rest
 
 let rec emit_compound_init name offset = function
-    | Ast.Initializr.SingleInit { e = Ast.InnerExp.String s; t = Types.Array(_, size) } ->
+    | Ast.Initializer.SingleInit { e = Ast.InnerExp.String s; t = Types.Array(_, size) } ->
         let str_bytes = Bytes.ofString s
         let padding_bytes = Bytes.make (int size - String.length s) (char 0)
         emit_string_init name offset (Bytes.cat str_bytes padding_bytes)
-    | Ast.Initializr.SingleInit e ->
+    | Ast.Initializer.SingleInit e ->
         let eval_init, v = emit_tacky_and_convert e
         eval_init
         @ [ T.CopyToOffset { src = v; dst = name; offset = offset } ]
-    | Ast.Initializr.CompoundInit(Types.Array(elem_type, _), inits) ->
+    | Ast.Initializer.CompoundInit(Types.Array(elem_type, _), inits) ->
         let handle_init idx elem_init =
             let new_offset =
                 offset + (idx * int (TypeUtils.getSize elem_type))
             emit_compound_init name new_offset elem_init
         List.concat (List.mapi handle_init inits)
-    | Ast.Initializr.CompoundInit(Types.Structure tag, inits) ->
+    | Ast.Initializer.CompoundInit(Types.Structure tag, inits) ->
         let members = TypeTable.get_members tag
-        let process_init (memb: TypeTable.member_entry) init =
+        let process_init (memb: TypeTable.MemberDef) init =
             let mem_offset = offset + memb.offset
             emit_compound_init name mem_offset init
         List.concat (List.map2 process_init members inits)
-    | Ast.Initializr.CompoundInit(_, _) ->
+    | Ast.Initializer.CompoundInit(_, _) ->
         failwith "Internal error: compound init has non-array type!"
 
 let rec emit_tacky_for_statement = function
@@ -460,8 +460,8 @@ let rec emit_tacky_for_statement = function
     | Ast.Null -> []
 
 and emit_tacky_for_block_item = function
-    | Ast.S s -> emit_tacky_for_statement s
-    | Ast.D d -> emit_local_declaration d
+    | Ast.Stmt s -> emit_tacky_for_statement s
+    | Ast.Decl d -> emit_local_declaration d
 
 and emit_local_declaration = function
     | Ast.VarDecl { storageClass = Some _ } -> []
@@ -470,9 +470,9 @@ and emit_local_declaration = function
     | Ast.StructDecl _ -> []
 
 and emit_var_declaration = function
-    | { name = name; init = Some(Ast.Initializr.SingleInit({ e = Ast.InnerExp.String _; t = Types.Array _ }) as string_init) } ->
+    | { name = name; init = Some(Ast.Initializer.SingleInit({ e = Ast.InnerExp.String _; t = Types.Array _ }) as string_init) } ->
         emit_compound_init name 0 string_init
-    | { name = name; init = Some(Ast.Initializr.SingleInit e); varType = varType } ->
+    | { name = name; init = Some(Ast.Initializer.SingleInit e); varType = varType } ->
         (* treat declaration with initializer like an assignment expression *)
         let eval_assignment, _assign_result =
             emit_assignment { e = Ast.InnerExp.Var name; t = varType } e
@@ -561,21 +561,21 @@ let emit_fun_declaration = function
     | _ -> None
 
 let convert_symbols_to_tacky all_symbols =
-    let to_var (name, entry: Symbols.entry) =
+    let to_var (name, entry: Symbols.SymbolEntry) =
         match entry.attrs with
         | Symbols.StaticAttr { init = init; ``global`` = ``global`` } ->
             match init with
             | Symbols.Initial i ->
-                Some(T.StaticVariable { name = name; t = entry.t;
+                Some(T.StaticVariable { name = name; t = entry.symType;
                                         ``global`` = ``global``; init = i })
             | Symbols.Tentative ->
                 Some(
-                    T.StaticVariable { name = name; t = entry.t;
+                    T.StaticVariable { name = name; t = entry.symType;
                                        ``global`` = ``global``;
-                                       init = Initializers.zero entry.t })
+                                       init = Initializers.zero entry.symType })
             | Symbols.NoInitializer -> None
         | Symbols.ConstAttr init ->
-            Some(T.StaticConstant { name = name; t = entry.t; init = init })
+            Some(T.StaticConstant { name = name; t = entry.symType; init = init })
         | _ -> None
     List.choose to_var all_symbols
 

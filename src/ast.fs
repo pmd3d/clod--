@@ -1,4 +1,4 @@
-﻿module Ast
+module Ast
 
 (* Unary and binary operators; used in exp AST nodes both with and without
    type information *)
@@ -45,9 +45,9 @@ module UntypedExp =
         | Dot of strct: Exp * ``member``: string
         | Arrow of strct: Exp * ``member``: string
 
-    type Initializr =
+    type Initializer =
         | SingleInit of Exp
-        | CompoundInit of Initializr list
+        | CompoundInit of Initializer list
 
 (* Exp and initializer AST definitions with type info *)
 module TypedExp =
@@ -73,12 +73,12 @@ module TypedExp =
 
     and Exp = { e: InnerExp; t: Types.t }
 
-    type Initializr =
+    type Initializer =
         | SingleInit of Exp
-        | CompoundInit of Types.t * Initializr list
+        | CompoundInit of Types.t * Initializer list
 
 module StorageClass =
-    type StorageClass =
+    type Kind =
         | Static
         | Extern
 
@@ -89,10 +89,10 @@ module Untyped =
 
     type UnaryOperator = Ops.UnaryOperator
     type BinaryOperator = Ops.BinaryOperator
-    type StorageClass = StorageClass.StorageClass
+    type StorageClass = StorageClass.Kind
 
     type Exp = UntypedExp.Exp
-    type Initializr = UntypedExp.Initializr
+    type Initializer = UntypedExp.Initializer
 
     type MemberDeclaration =
         { memberName: string
@@ -105,7 +105,7 @@ module Untyped =
     type VariableDeclaration =
         { name: string
           varType: Types.t
-          init: Initializr option
+          init: Initializer option
           storageClass: StorageClass option }
 
     type ForInit =
@@ -130,8 +130,8 @@ module Untyped =
         | Null
 
     and BlockItem =
-        | S of Statement
-        | D of Declaration
+        | Stmt of Statement
+        | Decl of Declaration
 
     and Block = Block of BlockItem list
 
@@ -147,7 +147,7 @@ module Untyped =
         | VarDecl of VariableDeclaration
         | StructDecl of StructDeclaration
 
-    type T = Program of Declaration list
+    type UntypedProgram = Program of Declaration list
 
 (* The complete typed AST *)
 module Typed =
@@ -156,11 +156,11 @@ module Typed =
 
     type UnaryOperator = Ops.UnaryOperator
     type BinaryOperator = Ops.BinaryOperator
-    type StorageClass = StorageClass.StorageClass
+    type StorageClass = StorageClass.Kind
 
     type InnerExp = TypedExp.InnerExp
     type Exp = TypedExp.Exp
-    type Initializr = TypedExp.Initializr
+    type Initializer = TypedExp.Initializer
 
     type MemberDeclaration =
         { memberName: string
@@ -173,7 +173,7 @@ module Typed =
     type VariableDeclaration =
         { name: string
           varType: Types.t
-          init: Initializr option
+          init: Initializer option
           storageClass: StorageClass option }
 
     type ForInit =
@@ -198,8 +198,8 @@ module Typed =
         | Null
 
     and BlockItem =
-        | S of Statement
-        | D of Declaration
+        | Stmt of Statement
+        | Decl of Declaration
 
     and Block = Block of BlockItem list
 
@@ -215,4 +215,4 @@ module Typed =
         | VarDecl of VariableDeclaration
         | StructDecl of StructDeclaration
 
-    type T = Program of Declaration list
+    type TypedProgram = Program of Declaration list

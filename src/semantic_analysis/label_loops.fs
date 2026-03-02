@@ -26,7 +26,7 @@ let rec label_statement current_label = function
   | (Null | Return _ | Expression _) as s -> s
 
 and label_block_item current_label = function
-  | S s -> S (label_statement current_label s)
+  | Stmt s -> Stmt (label_statement current_label s)
   | decl -> decl
 
 and label_block current_label (Block b) =

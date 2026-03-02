@@ -601,9 +601,9 @@ module Private =
                 | _ -> [ nextInit ]
             let initList = parseInitLoop ()
             let () = expect T.CloseBrace tokens
-            Ast.Initializr.CompoundInit initList
+            Ast.Initializer.CompoundInit initList
         else
-            Ast.Initializr.SingleInit(parseExp 0 tokens)
+            Ast.Initializer.SingleInit(parseExp 0 tokens)
 
     let parseMemberDeclaration (tokens: TokStream.t) =
         let specifiers = parseTypeSpecifierList tokens
@@ -751,9 +751,9 @@ module Private =
 
     and parseBlockItem (tokens: TokStream.t) =
         if isSpecifier (TokStream.peek tokens) then
-            Ast.D(parseDeclaration tokens)
+            Ast.Decl(parseDeclaration tokens)
         else
-            Ast.S(parseStatement tokens)
+            Ast.Stmt(parseStatement tokens)
 
     and parseBlock (tokens: TokStream.t) =
         expect T.OpenBrace tokens
@@ -775,7 +775,7 @@ module Private =
                 let nextDecl = parseDeclaration tokens
                 nextDecl :: parseDeclLoop ()
         let funDecls = parseDeclLoop ()
-        Ast.T.Program funDecls
+        Ast.UntypedProgram.Program funDecls
 
 let parse tokens =
     try

@@ -121,7 +121,7 @@ let convert_by_assignment e target_type =
     else failwith "Cannot convert type for asignment"
 
 let typecheck_var v =
-    let v_type = (Symbols.get v).t
+    let v_type = (Symbols.get v).symType
     let e = T.Var v
     match v_type with
     | FunType _ -> failwith "Tried to use function name as variable "
@@ -335,7 +335,7 @@ and typecheck_conditional condition then_exp else_exp =
     setType conditional_exp result_type
 
 and typecheck_fun_call f args =
-    let f_type = (Symbols.get f).t
+    let f_type = (Symbols.get f).symType
     match f_type with
     | FunType(param_types, ret_type) ->
         if List.length param_types <> List.length args then
@@ -463,7 +463,7 @@ let rec static_init_helper var_type init =
         if List.length inits > List.length members then
             failwith "Too many elements in struct initializer"
         else
-            let handle_member (current_offset, current_inits) (memb: TypeTable.member_entry) init =
+            let handle_member (current_offset, current_inits) (memb: TypeTable.MemberDef) init =
                 let padding =
                     if current_offset < memb.offset then
                         [ Initializers.ZeroInit (memb.offset - current_offset) ]
@@ -527,7 +527,7 @@ let rec make_zero_init t =
     | Structure tag ->
         let members = TypeTable.get_members tag
         T.CompoundInit
-            (t, List.map (fun (m: TypeTable.member_entry) -> make_zero_init m.member_type) members)
+            (t, List.map (fun (m: TypeTable.MemberDef) -> make_zero_init m.member_type) members)
     | Char | SChar -> scalar (Const.ConstChar 0y)
     | Int -> scalar (Const.ConstInt 0)
     | UChar -> scalar (Const.ConstUChar 0uy)
@@ -557,11 +557,11 @@ let rec typecheck_init target_type init =
                 ListUtil.takeDrop (List.length init_list) members
             let typechecked_members =
                 List.map2
-                    (fun (memb: TypeTable.member_entry) init -> typecheck_init memb.member_type init)
+                    (fun (memb: TypeTable.MemberDef) init -> typecheck_init memb.member_type init)
                     initialized_members init_list
             let padding =
                 List.map
-                    (fun (m: TypeTable.member_entry) -> make_zero_init m.member_type)
+                    (fun (m: TypeTable.MemberDef) -> make_zero_init m.member_type)
                     uninitialized_members
             T.CompoundInit (target_type, typechecked_members @ padding)
     | _, UE.SingleInit e ->
@@ -584,8 +584,8 @@ let rec typecheck_block ret_type (U.Block b) =
     Ast.Typed.Block (List.map (typecheck_block_item ret_type) b)
 
 and typecheck_block_item ret_type = function
-    | U.S s -> Ast.Typed.S (typecheck_statement ret_type s)
-    | U.D d -> Ast.Typed.D (typecheck_local_decl d)
+    | U.Stmt s -> Ast.Typed.Stmt (typecheck_statement ret_type s)
+    | U.Decl d -> Ast.Typed.Decl (typecheck_local_decl d)
 
 and typecheck_statement ret_type = function
     | U.Return (Some e) ->
@@ -653,7 +653,7 @@ and typecheck_local_var_decl ({ U.name = name; U.varType = varType; U.init = ini
         // If an external local var is already in the symbol table, don't need
         // to add it
         (match Symbols.get_opt name with
-         | Some { Symbols.t = t } ->
+         | Some { Symbols.symType = t } ->
              if t <> varType then
                  failwith "Variable redeclared with different type"
              else ()
@@ -718,7 +718,7 @@ and typecheck_fn_decl (fd: U.FunctionDeclaration) : Ast.Typed.FunctionDeclaratio
     else
         let ``global`` = storageClass <> Some Ast.StorageClass.Static
         // helper function to reconcile current and previous declarations
-        let check_against_previous { Symbols.t = prev_t; Symbols.attrs = attrs } =
+        let check_against_previous { Symbols.symType = prev_t; Symbols.attrs = attrs } =
             if prev_t <> funType then
                 failwith ("Redeclared function " + name + " with a different type")
             else
@@ -768,7 +768,7 @@ let typecheck_file_scope_var_decl
     else
         let current_global = storageClass <> Some Ast.StorageClass.Static
         let old_decl = Symbols.get_opt name
-        let check_against_previous { Symbols.t = t; Symbols.attrs = attrs } =
+        let check_against_previous { Symbols.symType = t; Symbols.attrs = attrs } =
             if t <> varType then failwith "Variable redeclared with different type"
             else
                 match attrs with
@@ -805,5 +805,5 @@ let typecheck_global_decl = function
     | U.VarDecl vd -> Ast.Typed.VarDecl (typecheck_file_scope_var_decl vd)
     | U.StructDecl sd -> Ast.Typed.StructDecl (typecheck_struct_decl sd)
 
-let typecheck (Ast.Untyped.Program decls) : Ast.Typed.T =
+let typecheck (Ast.Untyped.Program decls) : Ast.Typed.TypedProgram =
     Ast.Typed.Program (List.map typecheck_global_decl decls)

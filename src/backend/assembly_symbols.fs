@@ -7,7 +7,7 @@ open System.Collections.Generic
 // open Assembly
 // open Reg_set
 
-type FunEntry = {
+type AsmFunEntry = {
     defined: bool
     bytes_required: int
     return_on_stack: bool
@@ -16,17 +16,17 @@ type FunEntry = {
     callee_saved_regs_used: Reg_set.t
 }
 
-type ObjEntry = {
+type AsmObjEntry = {
     t: Assembly.AsmType
     is_static: bool
     constant: bool
 }
 
-type Entry =
-    | Fun of FunEntry
-    | Obj of ObjEntry
+type AsmSymbolEntry =
+    | Fun of AsmFunEntry
+    | Obj of AsmObjEntry
 
-let symbol_table = Dictionary<string, Entry>()
+let symbol_table = Dictionary<string, AsmSymbolEntry>()
 
 let add_fun fun_name defined return_on_stack param_regs return_regs =
     symbol_table.[fun_name] <- Fun {

@@ -101,7 +101,7 @@ let convert_val = function
   | Tacky.Constant (Const.ConstULong ul) -> Assembly.Imm (int64 ul)
   | Tacky.Constant (Const.ConstDouble d) -> Assembly.Data (add_constant None d, 0)
   | Tacky.Var v ->
-      if TypeUtils.isScalar (Symbols.get v).t then Assembly.Pseudo v
+      if TypeUtils.isScalar (Symbols.get v).symType then Assembly.Pseudo v
       else Assembly.PseudoMem (v, 0)
 
 let convert_type = function
@@ -828,7 +828,7 @@ let pass_params param_list return_on_stack =
   @ List.concat (List.mapi pass_on_stack stack_params)
 
 let returns_on_stack fn_name =
-  match (Symbols.get fn_name).t with
+  match (Symbols.get fn_name).symType with
   | Types.FunType (_, Types.Structure tag) -> (
       match classify_structure tag with Mem :: _ -> true | _ -> false)
   | Types.FunType _ -> false
@@ -872,7 +872,7 @@ let convert_constant (kvp: KeyValuePair<int64, string * int>) =
 
 (* convert each symbol table entry to assembly symbol table equivalent*)
 let convert_symbol name = function
-  | { Symbols.t = Types.FunType (paramTypes, retType);
+  | { Symbols.symType = Types.FunType (paramTypes, retType);
       Symbols.attrs = Symbols.FunAttr { defined = defined };
     }
     when (TypeUtils.isComplete retType || retType = Types.Void)
@@ -882,20 +882,20 @@ let convert_symbol name = function
       let param_regs = classify_param_types paramTypes return_on_stack in
       AssemblySymbols.add_fun name defined (returns_on_stack name) param_regs
         ret_regs
-  | { Symbols.t = Types.FunType _; Symbols.attrs = Symbols.FunAttr { defined = defined } } ->
+  | { Symbols.symType = Types.FunType _; Symbols.attrs = Symbols.FunAttr { defined = defined } } ->
       (* If this function has incomplete return type besides void, or any incomplete
        * param type (implying we don't define or call it in this translation unit)
        * use dummy values *)
       assert (not defined)
       AssemblySymbols.add_fun name defined false [] []
-  | { Symbols.t = t; attrs = Symbols.ConstAttr _ } ->
+  | { Symbols.symType = t; attrs = Symbols.ConstAttr _ } ->
       AssemblySymbols.add_constant name (convert_type t)
   (* use dummy type for static variables of incomplete type *)
-  | { Symbols.t = t; attrs = Symbols.StaticAttr _ } when not (TypeUtils.isComplete t) ->
+  | { Symbols.symType = t; attrs = Symbols.StaticAttr _ } when not (TypeUtils.isComplete t) ->
       AssemblySymbols.add_var name Assembly.Byte true
-  | { Symbols.t = t; attrs = Symbols.StaticAttr _ } ->
+  | { Symbols.symType = t; attrs = Symbols.StaticAttr _ } ->
       AssemblySymbols.add_var name (convert_var_type t) true
-  | { Symbols.t = t } -> AssemblySymbols.add_var name (convert_var_type t) false
+  | { Symbols.symType = t } -> AssemblySymbols.add_var name (convert_var_type t) false
 
 let gen (Tacky.Program top_levels) =
   (* clear the hashtable (necessary if we're compiling multiple source) *)
