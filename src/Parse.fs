@@ -524,7 +524,11 @@ module Private =
         | _ -> simpleDec
 
     and parseParamList (tokens: TokStream.TokStream) =
-        if TokStream.npeek 3 tokens = [ T.OpenParen; T.KWVoid; T.CloseParen ] then
+        if TokStream.npeek 2 tokens = [ T.OpenParen; T.CloseParen ] then
+            let _ = TokStream.takeToken tokens
+            let _ = TokStream.takeToken tokens
+            []
+        else if TokStream.npeek 3 tokens = [ T.OpenParen; T.KWVoid; T.CloseParen ] then
             let _ = TokStream.takeToken tokens
             let _ = TokStream.takeToken tokens
             let _ = TokStream.takeToken tokens
