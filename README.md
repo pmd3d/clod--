@@ -14,7 +14,7 @@ This implementation does not include extra credit features or the optimizations 
 
 ```bash
 git clone https://github.com/pmd3d/clod--.git
-cd src/
+cd clod--/src/
 dotnet run
 ```
 
