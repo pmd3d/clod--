@@ -62,7 +62,7 @@ let pp_tacky_val (out: System.IO.TextWriter) = function
     | Constant i -> write out (const_to_string i)
     | Var s -> write out s
 
-let pp_tacky_val_list (out: System.IO.TextWriter) (vals: tacky_val list) =
+let pp_tacky_val_list (out: System.IO.TextWriter) (vals: TackyVal list) =
     pp_print_list comma_sep pp_tacky_val out vals
 
 let pp_string_list (out: System.IO.TextWriter) (strs: string list) =
@@ -179,7 +179,7 @@ let pp_instruction (escape_brackets: bool) (out: System.IO.TextWriter) = functio
 
 let pp_function_definition (escape_brackets: bool) (``global``: bool) (name: string)
                            (``params``: string list) (out: System.IO.TextWriter)
-                           (body: instruction list) =
+                           (body: TackyInstruction list) =
     if ``global`` then write out "global "
     write out (sprintf "%s(" name)
     pp_string_list out ``params``

@@ -1,8 +1,8 @@
-﻿module Tacky
+module Tacky
 
-type unary_operator = Complement | Negate | Not
+type TackyUnaryOperator = Complement | Negate | Not
 
-type binary_operator =
+type TackyBinaryOperator =
     | Add
     | Subtract
     | Multiply
@@ -23,7 +23,7 @@ let const_compare a b =
         compare (System.Math.CopySign(1.0, d1)) (System.Math.CopySign(1.0, d2))
     | _ -> compare a b
 
-type tacky_val =
+type TackyVal =
     | Constant of Const.t
     | Var of string
 
@@ -37,77 +37,77 @@ let type_of_val = function
     | Constant c -> Const.type_of_const c
     | Var v -> (Symbols.get v).t
 
-type src_dst = { src: tacky_val; dst: tacky_val }
+type TackySrcDst = { src: TackyVal; dst: TackyVal }
 
-type unary_info = { op: unary_operator; src: tacky_val; dst: tacky_val }
+type TackyUnaryInfo = { op: TackyUnaryOperator; src: TackyVal; dst: TackyVal }
 
-type binary_info = {
-    op: binary_operator
-    src1: tacky_val
-    src2: tacky_val
-    dst: tacky_val
+type TackyBinaryInfo = {
+    op: TackyBinaryOperator
+    src1: TackyVal
+    src2: TackyVal
+    dst: TackyVal
 }
 
-type add_ptr_info = {
-    ptr: tacky_val
-    index: tacky_val
+type TackyAddPtrInfo = {
+    ptr: TackyVal
+    index: TackyVal
     scale: int
-    dst: tacky_val
+    dst: TackyVal
 }
 
-type copy_to_offset_info = { src: tacky_val; dst: string; offset: int }
+type TackyCopyToOffsetInfo = { src: TackyVal; dst: string; offset: int }
 
-type copy_from_offset_info = { src: string; offset: int; dst: tacky_val }
+type TackyCopyFromOffsetInfo = { src: string; offset: int; dst: TackyVal }
 
-type fun_call_info = { f: string; args: tacky_val list; dst: tacky_val option }
+type TackyFunCallInfo = { f: string; args: TackyVal list; dst: TackyVal option }
 
-type instruction =
-    | Return of tacky_val option
-    | SignExtend of src_dst
-    | ZeroExtend of src_dst
-    | DoubleToInt of src_dst
-    | IntToDouble of src_dst
-    | DoubleToUInt of src_dst
-    | UIntToDouble of src_dst
-    | Truncate of src_dst
-    | Unary of unary_info
-    | Binary of binary_info
-    | Copy of src_dst
-    | GetAddress of src_dst
-    | Load of {| src_ptr: tacky_val; dst: tacky_val |}
-    | Store of {| src: tacky_val; dst_ptr: tacky_val |}
-    | AddPtr of add_ptr_info
-    | CopyToOffset of copy_to_offset_info
-    | CopyFromOffset of copy_from_offset_info
+type TackyInstruction =
+    | Return of TackyVal option
+    | SignExtend of TackySrcDst
+    | ZeroExtend of TackySrcDst
+    | DoubleToInt of TackySrcDst
+    | IntToDouble of TackySrcDst
+    | DoubleToUInt of TackySrcDst
+    | UIntToDouble of TackySrcDst
+    | Truncate of TackySrcDst
+    | Unary of TackyUnaryInfo
+    | Binary of TackyBinaryInfo
+    | Copy of TackySrcDst
+    | GetAddress of TackySrcDst
+    | Load of {| src_ptr: TackyVal; dst: TackyVal |}
+    | Store of {| src: TackyVal; dst_ptr: TackyVal |}
+    | AddPtr of TackyAddPtrInfo
+    | CopyToOffset of TackyCopyToOffsetInfo
+    | CopyFromOffset of TackyCopyFromOffsetInfo
     | Jump of string
-    | JumpIfZero of tacky_val * string
-    | JumpIfNotZero of tacky_val * string
+    | JumpIfZero of TackyVal * string
+    | JumpIfNotZero of TackyVal * string
     | Label of string
-    | FunCall of fun_call_info
+    | FunCall of TackyFunCallInfo
 
-type function_def = {
+type TackyFunctionDef = {
     name: string
     ``global``: bool
     ``params``: string list
-    body: instruction list
+    body: TackyInstruction list
 }
 
-type static_variable_def = {
+type TackyStaticVariableDef = {
     name: string
     t: Types.t
     ``global``: bool
     init: Initializers.static_init list
 }
 
-type static_constant_def = {
+type TackyStaticConstantDef = {
     name: string
     t: Types.t
     init: Initializers.static_init
 }
 
-type top_level =
-    | Function of function_def
-    | StaticVariable of static_variable_def
-    | StaticConstant of static_constant_def
+type TackyTopLevel =
+    | Function of TackyFunctionDef
+    | StaticVariable of TackyStaticVariableDef
+    | StaticConstant of TackyStaticConstantDef
 
-type t = Program of top_level list
+type TackyProgram = Program of TackyTopLevel list

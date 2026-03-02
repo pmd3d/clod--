@@ -74,8 +74,8 @@ let eval_size t =
 
 (* an expression result that may or may not be lvalue converted *)
 type exp_result =
-    | PlainOperand of T.tacky_val
-    | DereferencedPointer of T.tacky_val
+    | PlainOperand of T.TackyVal
+    | DereferencedPointer of T.TackyVal
     | SubObject of string * int
 
 (* return list of instructions to evaluate expression and resulting exp_result
