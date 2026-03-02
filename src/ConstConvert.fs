@@ -31,6 +31,15 @@ let constOfInt64 v = function
             ("Internal error: can't convert constant to non_scalar type "
              + Types.show t)
 
+let uint64ToDouble (ul: uint64) =
+    if ul <= uint64 System.Int64.MaxValue then
+        float (int64 ul)
+    else
+        let half = ul >>> 1
+        let lsb = ul &&& 1UL
+        let halfDouble = float (int64 (half ||| lsb))
+        halfDouble + halfDouble
+
 let constConvert target_type c =
     if C.typeOfConst c = target_type then c
     else
@@ -38,7 +47,7 @@ let constConvert target_type c =
         (* Convert to/from double directly to avoid precision loss
            going through the int64 roundtrip *)
         | T.Double, C.ConstULong ul ->
-            C.ConstDouble(float ul)
+            C.ConstDouble(uint64ToDouble ul)
         | T.Double, _ ->
             C.ConstDouble(float (constToInt64 c))
         | T.ULong, C.ConstDouble d ->

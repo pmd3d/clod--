@@ -148,6 +148,11 @@ let ``ulong to double round to odd`` () =
   Assert.Equal("ConstDouble 9223372036854775808", convert_and_print Types.Double ul)
 
 [<Fact>]
+let ``ulong to double above halfway`` () =
+    let ul = Const.ConstULong 9223372036854776833UL in
+    Assert.Equal("ConstDouble 9223372036854777856", convert_and_print Types.Double ul)
+
+[<Fact>]
 let ``signed char to long`` () =
   let c = Const.ConstChar -10y in
   Assert.Equal("ConstLong -10L", convert_and_print Types.Long c)
