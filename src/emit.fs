@@ -11,28 +11,28 @@ let suffix = function
         failwith
             "Internal error: found instruction w/ non-scalar operand type"
 
-let align_directive =
+let alignDirective =
     match !Settings.Platform with
     | Settings.OS_X -> ".balign"
     | Settings.Linux -> ".align"
 
-let show_label name =
+let showLabel name =
     match !Settings.Platform with
     | Settings.OS_X -> "_" + name
     | Settings.Linux -> name
 
-let show_local_label label =
+let showLocalLabel label =
     match !Settings.Platform with
     | Settings.OS_X -> "L" + label
     | Settings.Linux -> ".L" + label
 
-let show_fun_name f =
+let showFunName f =
     match !Settings.Platform with
     | Settings.OS_X -> "_" + f
     | Settings.Linux ->
-        if AssemblySymbols.is_defined f then f else f + "@PLT"
+        if AssemblySymbols.isDefined f then f else f + "@PLT"
 
-let show_long_reg = function
+let showLongReg = function
     | AX -> "%eax"
     | BX -> "%ebx"
     | CX -> "%ecx"
@@ -53,7 +53,7 @@ let show_long_reg = function
         failwith
             "Internal error: can't store longword type in XMM register"
 
-let show_quadword_reg = function
+let showQuadwordReg = function
     | AX -> "%rax"
     | BX -> "%rbx"
     | CX -> "%rcx"
@@ -74,7 +74,7 @@ let show_quadword_reg = function
         failwith
             "Internal error: can't store quadword type in XMM register"
 
-let show_double_reg = function
+let showDoubleReg = function
     | XMM0 -> "%xmm0"
     | XMM1 -> "%xmm1"
     | XMM2 -> "%xmm2"
@@ -95,7 +95,7 @@ let show_double_reg = function
         failwith
             "Internal error: can't store double type in general-purpose register"
 
-let show_byte_reg = function
+let showByteReg = function
     | AX -> "%al"
     | BX -> "%bl"
     | CX -> "%cl"
@@ -115,43 +115,43 @@ let show_byte_reg = function
     | _ ->
         failwith "Internal error: can't store byte type in XMM register"
 
-let show_operand t = function
+let showOperand t = function
     | Reg r ->
         (match t with
-        | Byte -> show_byte_reg r
-        | Longword -> show_long_reg r
-        | Quadword -> show_quadword_reg r
-        | Double -> show_double_reg r
+        | Byte -> showByteReg r
+        | Longword -> showLongReg r
+        | Quadword -> showQuadwordReg r
+        | Double -> showDoubleReg r
         | ByteArray _ ->
             failwith
                 "Internal error: can't store non-scalar operand in register")
     | Imm i -> sprintf "$%s" (string i)
-    | Memory(r, 0) -> sprintf "(%s)" (show_quadword_reg r)
-    | Memory(r, i) -> sprintf "%d(%s)" i (show_quadword_reg r)
+    | Memory(r, 0) -> sprintf "(%s)" (showQuadwordReg r)
+    | Memory(r, i) -> sprintf "%d(%s)" i (showQuadwordReg r)
     | Data(name, offset) ->
         let lbl =
-            if AssemblySymbols.is_constant name then
-                show_local_label name
-            else show_label name
+            if AssemblySymbols.isConstant name then
+                showLocalLabel name
+            else showLabel name
         if offset = 0 then sprintf "%s(%%rip)" lbl
         else sprintf "%s+%d(%%rip)" lbl offset
     | Indexed { ``base`` = b; index = index; scale = scale } ->
-        sprintf "(%s, %s, %d)" (show_quadword_reg b)
-            (show_quadword_reg index) scale
+        sprintf "(%s, %s, %d)" (showQuadwordReg b)
+            (showQuadwordReg index) scale
     (* printing out pseudoregisters is only for debugging *)
     | Pseudo name -> sprintf "%%%s" name
     | PseudoMem(name, offset) -> sprintf "%d(%%%s)" offset name
 
-let show_byte_operand = function
-    | Reg r -> show_byte_reg r
-    | other -> show_operand Longword other
+let showByteOperand = function
+    | Reg r -> showByteReg r
+    | other -> showOperand Longword other
 
-let show_unary_instruction = function
+let showUnaryInstruction = function
     | Neg -> "neg"
     | Not -> "not"
     | Shr -> "shr"
 
-let show_binary_instruction = function
+let showBinaryInstruction = function
     | Add -> "add"
     | Sub -> "sub"
     | Mult -> "imul"
@@ -164,7 +164,7 @@ let show_binary_instruction = function
         failwith
             "Internal error, should handle xor as special case"
 
-let show_cond_code = function
+let showCondCode = function
     | E -> "e"
     | NE -> "ne"
     | G -> "g"
@@ -176,91 +176,91 @@ let show_cond_code = function
     | B -> "b"
     | BE -> "be"
 
-let emit_instruction (chan: System.IO.StreamWriter) = function
+let emitInstruction (chan: System.IO.StreamWriter) = function
     | Mov(t, src, dst) ->
         chan.Write(
-            sprintf "\tmov%s %s, %s\n" (suffix t) (show_operand t src)
-                (show_operand t dst))
+            sprintf "\tmov%s %s, %s\n" (suffix t) (showOperand t src)
+                (showOperand t dst))
     | Unary(operator, t, dst) ->
         chan.Write(
             sprintf "\t%s%s %s\n"
-                (show_unary_instruction operator)
-                (suffix t) (show_operand t dst))
+                (showUnaryInstruction operator)
+                (suffix t) (showOperand t dst))
     | Binary { op = Xor; t = Double; src = src; dst = dst } ->
         chan.Write(
-            sprintf "\txorpd %s, %s\n" (show_operand Double src)
-                (show_operand Double dst))
+            sprintf "\txorpd %s, %s\n" (showOperand Double src)
+                (showOperand Double dst))
     | Binary { op = Mult; t = Double; src = src; dst = dst } ->
         chan.Write(
-            sprintf "\tmulsd %s, %s\n" (show_operand Double src)
-                (show_operand Double dst))
+            sprintf "\tmulsd %s, %s\n" (showOperand Double src)
+                (showOperand Double dst))
     | Binary { op = op; t = t; src = src; dst = dst } ->
         chan.Write(
             sprintf "\t%s%s %s, %s\n"
-                (show_binary_instruction op)
-                (suffix t) (show_operand t src) (show_operand t dst))
+                (showBinaryInstruction op)
+                (suffix t) (showOperand t src) (showOperand t dst))
     | Cmp(Double, src, dst) ->
         chan.Write(
-            sprintf "\tcomisd %s, %s\n" (show_operand Double src)
-                (show_operand Double dst))
+            sprintf "\tcomisd %s, %s\n" (showOperand Double src)
+                (showOperand Double dst))
     | Cmp(t, src, dst) ->
         chan.Write(
-            sprintf "\tcmp%s %s, %s\n" (suffix t) (show_operand t src)
-                (show_operand t dst))
+            sprintf "\tcmp%s %s, %s\n" (suffix t) (showOperand t src)
+                (showOperand t dst))
     | Idiv(t, operand) ->
         chan.Write(
-            sprintf "\tidiv%s %s\n" (suffix t) (show_operand t operand))
+            sprintf "\tidiv%s %s\n" (suffix t) (showOperand t operand))
     | Div(t, operand) ->
         chan.Write(
-            sprintf "\tdiv%s %s\n" (suffix t) (show_operand t operand))
+            sprintf "\tdiv%s %s\n" (suffix t) (showOperand t operand))
     | Lea(src, dst) ->
         chan.Write(
             sprintf "\tleaq %s, %s\n"
-                (show_operand Quadword src)
-                (show_operand Quadword dst))
+                (showOperand Quadword src)
+                (showOperand Quadword dst))
     | Cdq Longword -> chan.Write("\tcdq\n")
     | Cdq Quadword -> chan.Write("\tcqo\n")
     | Jmp lbl ->
-        chan.Write(sprintf "\tjmp %s\n" (show_local_label lbl))
+        chan.Write(sprintf "\tjmp %s\n" (showLocalLabel lbl))
     | JmpCC(code, lbl) ->
         chan.Write(
-            sprintf "\tj%s %s\n" (show_cond_code code)
-                (show_local_label lbl))
+            sprintf "\tj%s %s\n" (showCondCode code)
+                (showLocalLabel lbl))
     | SetCC(code, operand) ->
         chan.Write(
-            sprintf "\tset%s %s\n" (show_cond_code code)
-                (show_byte_operand operand))
+            sprintf "\tset%s %s\n" (showCondCode code)
+                (showByteOperand operand))
     | Label lbl ->
-        chan.Write(sprintf "%s:\n" (show_local_label lbl))
+        chan.Write(sprintf "%s:\n" (showLocalLabel lbl))
     | Push op ->
         chan.Write(
-            sprintf "\tpushq %s\n" (show_operand Quadword op))
+            sprintf "\tpushq %s\n" (showOperand Quadword op))
     | Pop r ->
-        chan.Write(sprintf "\tpopq %s\n" (show_quadword_reg r))
+        chan.Write(sprintf "\tpopq %s\n" (showQuadwordReg r))
     | Call f ->
-        chan.Write(sprintf "\tcall %s\n" (show_fun_name f))
+        chan.Write(sprintf "\tcall %s\n" (showFunName f))
     | Movsx { src_type = src_type; dst_type = dst_type; src = src;
               dst = dst } ->
         chan.Write(
             sprintf "\tmovs%s%s %s, %s\n" (suffix src_type)
                 (suffix dst_type)
-                (show_operand src_type src)
-                (show_operand dst_type dst))
+                (showOperand src_type src)
+                (showOperand dst_type dst))
     | MovZeroExtend { src_type = src_type; dst_type = dst_type;
                       src = src; dst = dst } ->
         chan.Write(
             sprintf "\tmovz%s%s %s, %s\n" (suffix src_type)
                 (suffix dst_type)
-                (show_operand src_type src)
-                (show_operand dst_type dst))
+                (showOperand src_type src)
+                (showOperand dst_type dst))
     | Cvtsi2sd(t, src, dst) ->
         chan.Write(
             sprintf "\tcvtsi2sd%s %s, %s\n" (suffix t)
-                (show_operand t src) (show_operand Double dst))
+                (showOperand t src) (showOperand Double dst))
     | Cvttsd2si(t, src, dst) ->
         chan.Write(
             sprintf "\tcvttsd2si%s %s, %s\n" (suffix t)
-                (show_operand Double src) (show_operand t dst))
+                (showOperand Double src) (showOperand t dst))
     | Ret ->
         chan.Write(
             "\n\tmovq %rbp, %rsp\n\tpopq %rbp\n\tret\n")
@@ -268,20 +268,20 @@ let emit_instruction (chan: System.IO.StreamWriter) = function
         failwith
             "Internal error: can't apply cdq to a byte or non-integer type"
 
-let emit_global_directive (chan: System.IO.StreamWriter) ``global`` label =
+let emitGlobalDirective (chan: System.IO.StreamWriter) ``global`` label =
     if ``global`` then chan.Write(sprintf "\t.globl %s\n" label)
 
 let escape s =
-    let escape_char c =
+    let escapeChar c =
         if StringUtil.isAlnum c then string c
         (* use octal escape for everything except alphanumeric values
          * make sure to pad out octal escapes to 3 digits so we don't, e.g.
          * escape "hello 1" as "hello\401" *)
         else sprintf "\\%03o" (int c)
     String.concat ""
-        (s |> Seq.map escape_char |> Seq.toList)
+        (s |> Seq.map escapeChar |> Seq.toList)
 
-let emit_init (chan: System.IO.StreamWriter) = function
+let emitInit (chan: System.IO.StreamWriter) = function
     | Initializers.IntInit i ->
         chan.Write(sprintf "\t.long %s\n" (string i))
     | Initializers.LongInit l ->
@@ -307,10 +307,10 @@ let emit_init (chan: System.IO.StreamWriter) = function
     | Initializers.StringInit(s, false) ->
         chan.Write(sprintf "\t.ascii \"%s\"\n" (escape s))
     | Initializers.PointerInit lbl ->
-        chan.Write(sprintf "\t.quad %s\n" (show_local_label lbl))
+        chan.Write(sprintf "\t.quad %s\n" (showLocalLabel lbl))
 
-let emit_constant (chan: System.IO.StreamWriter) name alignment init =
-    let constant_section_name =
+let emitConstant (chan: System.IO.StreamWriter) name alignment init =
+    let constantSectionName =
         match (!Settings.Platform, init) with
         | Settings.Linux, _ -> ".section .rodata"
         | Settings.OS_X, Initializers.StringInit _ -> ".cstring"
@@ -322,50 +322,50 @@ let emit_constant (chan: System.IO.StreamWriter) name alignment init =
                     "Internal error: found constant with bad alignment"
     chan.Write(
         sprintf "\n\t%s\n\t%s %d\n  %s:\n"
-            constant_section_name align_directive alignment
-            (show_local_label name))
-    emit_init chan init
+            constantSectionName alignDirective alignment
+            (showLocalLabel name))
+    emitInit chan init
     (* macOS linker gets cranky if you write only 8 bytes to .literal16 section *)
-    if constant_section_name = ".literal16" then
-        emit_init chan (Initializers.LongInit 0L)
+    if constantSectionName = ".literal16" then
+        emitInit chan (Initializers.LongInit 0L)
 
-let emit_tl (chan: System.IO.StreamWriter) = function
+let emitTl (chan: System.IO.StreamWriter) = function
     | Function { name = name; ``global`` = isGlobal;
                  instructions = instructions } ->
-        let label = show_label name
-        emit_global_directive chan isGlobal label
+        let label = showLabel name
+        emitGlobalDirective chan isGlobal label
         chan.Write(
             sprintf "\n\t.text\n%s:\n\tpushq %%rbp\n\tmovq %%rsp, %%rbp\n"
                 label)
-        List.iter (emit_instruction chan) instructions
+        List.iter (emitInstruction chan) instructions
     | StaticVariable { name = name; ``global`` = isGlobal; init = init;
                        alignment = alignment }
-        when List.forall Initializers.is_zero init ->
-        let label = show_label name
-        emit_global_directive chan isGlobal label
+        when List.forall Initializers.isZero init ->
+        let label = showLabel name
+        emitGlobalDirective chan isGlobal label
         chan.Write(
             sprintf "\n\t.bss\n\t%s %d\n%s:\n"
-                align_directive alignment label)
-        List.iter (emit_init chan) init
+                alignDirective alignment label)
+        List.iter (emitInit chan) init
     | StaticVariable { name = name; ``global`` = isGlobal; init = init;
                        alignment = alignment } ->
-        let label = show_label name
-        emit_global_directive chan isGlobal label
+        let label = showLabel name
+        emitGlobalDirective chan isGlobal label
         chan.Write(
             sprintf "\n\t.data\n\t%s %d\n%s:\n"
-                align_directive alignment label)
-        List.iter (emit_init chan) init
+                alignDirective alignment label)
+        List.iter (emitInit chan) init
     | StaticConstant { name = name; alignment = alignment; init = init } ->
-        emit_constant chan name alignment init
+        emitConstant chan name alignment init
 
-let emit_stack_note (chan: System.IO.StreamWriter) =
+let emitStackNote (chan: System.IO.StreamWriter) =
     match !Settings.Platform with
     | Settings.OS_X -> ()
     | Settings.Linux ->
         chan.Write("\t.section .note.GNU-stack,\"\",@progbits\n")
 
 let emit assembly_file (Program tls) =
-    use output_channel = new System.IO.StreamWriter(assembly_file : string)
-    List.iter (emit_tl output_channel) tls
-    emit_stack_note output_channel
-    output_channel.Flush()
+    use outputChannel = new System.IO.StreamWriter(assembly_file : string)
+    List.iter (emitTl outputChannel) tls
+    emitStackNote outputChannel
+    outputChannel.Flush()

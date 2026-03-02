@@ -17,7 +17,7 @@ type TackyBinaryOperator =
 
 // we need a custom comparison function for constants to make sure that 0.0 and
 // -0.0 don't compare equal
-let const_compare a b =
+let constCompare a b =
     match (a, b) with
     | Const.ConstDouble d1, Const.ConstDouble d2 when d1 = d2 ->
         compare (System.Math.CopySign(1.0, d1)) (System.Math.CopySign(1.0, d2))
@@ -27,14 +27,14 @@ type TackyVal =
     | Constant of Const.ConstValue
     | Var of string
 
-let show_tacky_val = function Constant c -> Const.show c | Var v -> v
-let pp_tacky_val (fmt: System.IO.TextWriter) v = fmt.Write(show_tacky_val v)
+let showTackyVal = function Constant c -> Const.show c | Var v -> v
+let ppTackyVal (fmt: System.IO.TextWriter) v = fmt.Write(showTackyVal v)
 
 // TODO maybe this should be in a separate module?
-let type_of_val = function
+let typeOfVal = function
     // note: this reports the type of ConstChar as SChar instead of Char, doesn't
     // matter in this context
-    | Constant c -> Const.ConstValueype_of_const c
+    | Constant c -> Const.typeOfConst c
     | Var v -> (Symbols.get v).symType
 
 type TackySrcDst = { src: TackyVal; dst: TackyVal }

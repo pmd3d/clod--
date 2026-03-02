@@ -15,7 +15,7 @@ let compile (stage: Settings.Stage) (optimizations: Settings.Optimizations) (src
             // 1. resolve identifiers
             let resolved_ast = Resolve.resolve ast
             // 2. annotate loops and break/continue statements
-            let annotated_ast = Label_loops.label_loops resolved_ast
+            let annotated_ast = Label_loops.labelLoops resolved_ast
             // 3. typecheck definitions and uses of functions and variables
             let typed_ast = Typecheck.typecheck annotated_ast
             if stage = Settings.Validate then ()
@@ -24,14 +24,14 @@ let compile (stage: Settings.Stage) (optimizations: Settings.Optimizations) (src
                 let tacky = TackyGen.gen typed_ast
                 // print to file (src filename with .debug.tacky extension) if debug is
                 // enabled
-                Tacky_print.debug_print_tacky src_file tacky
+                Tacky_print.debugPrintTacky src_file tacky
                 // optimize it!
                 let optimized_tacky = Optimize.optimize optimizations src_file tacky
                 if stage = Settings.Tacky then ()
                 else
                     // start by getting all aliased vars, we'll need them for register
                     // allocation
-                    let aliased_vars = Address_taken.analyze_program optimized_tacky
+                    let aliased_vars = Address_taken.analyzeProgram optimized_tacky
                     // Assembly generation has three steps:
                     // 1. convert TACKY to assembly
                     let asm_ast = Codegen.gen optimized_tacky
@@ -41,14 +41,14 @@ let compile (stage: Settings.Stage) (optimizations: Settings.Optimizations) (src
                             System.IO.Path.ChangeExtension(src_file, null) + ".prealloc.debug.s"
                         Emit.emit prealloc_filename asm_ast
                     // replace remaining pseudoregisters with Data/Stack operands
-                    let asm_ast1 = Regalloc.allocate_registers aliased_vars asm_ast
+                    let asm_ast1 = Regalloc.allocateRegisters aliased_vars asm_ast
                     if Settings.Debug.Value then
                         let postalloc_filename =
                             System.IO.Path.ChangeExtension(src_file, null) + ".postalloc.debug.s"
                         Emit.emit postalloc_filename asm_ast
-                    let asm_ast2 = ReplacePseudos.replace_pseudos asm_ast1
+                    let asm_ast2 = ReplacePseudos.replacePseudos asm_ast1
                     // fix up instructions
-                    let asm_ast3 = InstructionFixup.fixup_program asm_ast2
+                    let asm_ast3 = InstructionFixup.fixupProgram asm_ast2
                     if stage = Settings.Codegen then ()
                     else
                         let asm_filename = System.IO.Path.ChangeExtension(src_file, ".s")

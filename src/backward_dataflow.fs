@@ -4,20 +4,20 @@ type Annotation<'varSet> = 'varSet
 type AnnotatedBlock<'a, 'block> = Cfg.BasicBlock<'a, 'block>
 type AnnotatedGraph<'a, 'block> = Cfg.ControlFlowGraph<'a, 'block>
 
-let debug_print (extra_tag: string) (pp_var: System.IO.TextWriter -> 'var -> unit)
+let debugPrint (extra_tag: string) (pp_var: System.IO.TextWriter -> 'var -> unit)
                 (elements: 'varSet -> 'var list)
                 (print_graphviz: (System.IO.TextWriter -> 'varSet -> unit) -> 'cfg -> unit)
-                (debug_label: string)
-                (set_debug_label: string -> 'cfg -> 'cfg)
+                (debugLabel: string)
+                (setDebugLabel: string -> 'cfg -> 'cfg)
                 (cfg: 'cfg) =
     if Settings.Debug.Value then
-        let livevar_printer (fmt: System.IO.TextWriter) (live_vars: 'varSet) =
-            elements live_vars
+        let livevarPrinter (fmt: System.IO.TextWriter) (liveVars: 'varSet) =
+            elements liveVars
             |> List.iteri (fun i v ->
                 if i > 0 then fmt.Write(", ")
                 pp_var fmt v)
-        let lbl = debug_label + "_dse" + extra_tag
-        print_graphviz livevar_printer (set_debug_label lbl cfg)
+        let lbl = debugLabel + "_dse" + extra_tag
+        print_graphviz livevarPrinter (setDebugLabel lbl cfg)
 
 let analyze (pp_var: System.IO.TextWriter -> 'var -> unit)
             (empty: 'varSet)
@@ -30,24 +30,24 @@ let analyze (pp_var: System.IO.TextWriter -> 'var -> unit)
             (get_value: 'block -> 'varSet)
             (get_preds: 'block -> Cfg.NodeId list)
             (get_basic_blocks: 'cfg -> (int * 'block) list)
-            (get_debug_label: 'cfg -> string)
-            (set_debug_label: string -> 'cfg -> 'cfg)
+            (getDebugLabel: 'cfg -> string)
+            (setDebugLabel: string -> 'cfg -> 'cfg)
             (print_graphviz: (System.IO.TextWriter -> 'varSet -> unit) -> 'cfg -> unit)
             (cfg: 'cfg0) =
-    let starting_cfg = initialize_annotation cfg empty
-    let rec process_worklist (current_cfg: 'cfg)
+    let startingCfg = initialize_annotation cfg empty
+    let rec processWorklist (currentCfg: 'cfg)
                              (worklist: (int * 'block) list) =
-        debug_print "_in_progress_" pp_var elements print_graphviz
-            (get_debug_label current_cfg) set_debug_label current_cfg
+        debugPrint "_in_progress_" pp_var elements print_graphviz
+            (getDebugLabel currentCfg) setDebugLabel currentCfg
         match worklist with
-        | [] -> current_cfg // we're done
-        | (block_idx, blk) :: rest ->
-            let old_annotation = get_value blk
-            let live_vars_at_exit = meet_fn current_cfg blk
-            let block' = transfer_fn blk live_vars_at_exit
-            let updated_cfg = update_basic_block block_idx block' current_cfg
-            let new_worklist =
-                if equal old_annotation (get_value block') then rest
+        | [] -> currentCfg // we're done
+        | (blockIdx, blk) :: rest ->
+            let oldAnnotation = get_value blk
+            let liveVarsAtExit = meet_fn currentCfg blk
+            let block' = transfer_fn blk liveVarsAtExit
+            let updatedCfg = update_basic_block blockIdx block' currentCfg
+            let newWorklist =
+                if equal oldAnnotation (get_value block') then rest
                 else
                     List.fold
                         (fun wklist pred ->
@@ -58,9 +58,9 @@ let analyze (pp_var: System.IO.TextWriter -> 'var -> unit)
                             | Cfg.Block n ->
                                 if List.exists (fun (k, _) -> k = n) wklist then wklist
                                 else
-                                    let blocks = get_basic_blocks updated_cfg
+                                    let blocks = get_basic_blocks updatedCfg
                                     let blk = List.find (fun (k, _) -> k = n) blocks |> snd
                                     (n, blk) :: wklist)
                         rest (get_preds block')
-            process_worklist updated_cfg new_worklist
-    process_worklist starting_cfg (List.rev (get_basic_blocks starting_cfg))
+            processWorklist updatedCfg newWorklist
+    processWorklist startingCfg (List.rev (get_basic_blocks startingCfg))

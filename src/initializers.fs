@@ -31,7 +31,7 @@ let ppStaticInit (fmt: System.IO.TextWriter) si =
 
 let zero t = [ ZeroInit(int (TypeUtils.getSize t)) ]
 
-let is_zero = function
+let isZero = function
     | CharInit c -> c = 0y
     | IntInit i -> i = 0
     | LongInit l -> l = 0L

@@ -72,10 +72,10 @@ let show = function
 let pp (fmt: System.IO.TextWriter) cnst =
     fmt.Write(show cnst)
 
-let int_zero = ConstInt 0
-let int_one = ConstInt 1
+let intZero = ConstInt 0
+let intOne = ConstInt 1
 
-let type_of_const = function
+let typeOfConst = function
     | ConstChar _ -> Types.SChar
     | ConstUChar _ -> Types.UChar
     | ConstInt _ -> Types.Int

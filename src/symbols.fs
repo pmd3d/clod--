@@ -16,41 +16,41 @@ type IdentifierAttrs =
 
 type SymbolEntry = { symType: Types.CType; attrs: IdentifierAttrs }
 
-let symbol_table = System.Collections.Generic.Dictionary<string, SymbolEntry>()
+let symbolTable = System.Collections.Generic.Dictionary<string, SymbolEntry>()
 
 // always use replace instead of add; we want to remove old binding when we add a new one
 
-let add_automatic_var name (t: Types.CType) =
-    symbol_table.[name] <- { symType = t; attrs = LocalAttr }
+let addAutomaticVar name (t: Types.CType) =
+    symbolTable.[name] <- { symType = t; attrs = LocalAttr }
 
-let add_static_var name (t: Types.CType) (``global``: bool) (init: InitialValue) =
-    symbol_table.[name] <- { symType = t; attrs = StaticAttr { init = init; ``global`` = ``global`` } }
+let addStaticVar name (t: Types.CType) (``global``: bool) (init: InitialValue) =
+    symbolTable.[name] <- { symType = t; attrs = StaticAttr { init = init; ``global`` = ``global`` } }
 
-let add_fun name (t: Types.CType) (``global``: bool) (defined: bool) =
-    symbol_table.[name] <- { symType = t; attrs = FunAttr { ``global`` = ``global``; defined = defined } }
+let addFun name (t: Types.CType) (``global``: bool) (defined: bool) =
+    symbolTable.[name] <- { symType = t; attrs = FunAttr { ``global`` = ``global``; defined = defined } }
 
-let get name = symbol_table.[name]
+let get name = symbolTable.[name]
 
-let get_opt name =
-    match symbol_table.TryGetValue(name) with
+let getOpt name =
+    match symbolTable.TryGetValue(name) with
     | true, v -> Some v
     | false, _ -> None
 
-let add_string (s: string) =
+let addString (s: string) =
     let str_id = UniqueIds.makeNamedTemporary "string"
     let t = Types.Array (Types.Char, int64 (String.length s + 1))
-    symbol_table.[str_id] <-
+    symbolTable.[str_id] <-
         { symType = t; attrs = ConstAttr (Initializers.StringInit (s, true)) }
     str_id
 
-let is_global name =
+let isGlobal name =
     match (get name).attrs with
     | LocalAttr | ConstAttr _ -> false
     | StaticAttr { ``global`` = g } -> g
     | FunAttr { ``global`` = g } -> g
 
 let bindings () =
-    symbol_table |> Seq.map (fun kv -> (kv.Key, kv.Value)) |> Seq.toList
+    symbolTable |> Seq.map (fun kv -> (kv.Key, kv.Value)) |> Seq.toList
 
 let iter f =
-    symbol_table |> Seq.iter (fun kv -> f kv.Key kv.Value)
+    symbolTable |> Seq.iter (fun kv -> f kv.Key kv.Value)

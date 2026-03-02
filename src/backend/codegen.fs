@@ -4,15 +4,15 @@ open TypeUtils
 open Const
 open System.Collections.Generic
 
-let int_param_passing_regs = [ Assembly.DI; Assembly.SI; Assembly.DX; Assembly.CX; Assembly.R8; Assembly.R9 ]
+let intParamPassingRegs = [ Assembly.DI; Assembly.SI; Assembly.DX; Assembly.CX; Assembly.R8; Assembly.R9 ]
 
-let dbl_param_passing_regs =
+let dblParamPassingRegs =
   [ Assembly.XMM0; Assembly.XMM1; Assembly.XMM2; Assembly.XMM3; Assembly.XMM4; Assembly.XMM5; Assembly.XMM6; Assembly.XMM7 ]
 
 let zero = Assembly.Imm 0L
 let constants = new Dictionary<int64, string * int>()
 
-let add_constant alignmentOpt dbl =
+let addConstant alignmentOpt dbl =
   let alignment = defaultArg alignmentOpt 8
   let key = System.BitConverter.DoubleToInt64Bits dbl
   (* see if we've defined this double already *)
@@ -32,7 +32,7 @@ let add_constant alignmentOpt dbl =
    If it contains exactly 8, 4, or 1 bytes, use the corresponding type (note
    that all but the last eightbyte of a struct are exactly 8 bytes). If it's an
    uneven size, use the ByteArray type. *)
-let get_eightbyte_type eightbyte_idx total_var_size =
+let getEightbyteType eightbyte_idx total_var_size =
   let bytes_left = total_var_size - (eightbyte_idx * 8)
   match bytes_left with
   | x when x >= 8 -> Assembly.Quadword (* *)
@@ -40,7 +40,7 @@ let get_eightbyte_type eightbyte_idx total_var_size =
   | 1 -> Assembly.Byte
   | x -> Assembly.ByteArray { size = x; alignment = 8 }
 
-let add_offset n = function
+let addOffset n = function
   | Assembly.PseudoMem (base_, off) -> Assembly.PseudoMem (base_, off + n)
   | Assembly.Memory (r, off) -> Assembly.Memory (r, off + n)
   (* you could do pointer arithmetic w/ indexed or data operands but we don't
@@ -49,7 +49,7 @@ let add_offset n = function
       failwith
         "Internal error: trying to copy data to or from non-memory operand"
 
-let rec copy_bytes src_val dst_val byte_count =
+let rec copyBytes src_val dst_val byte_count =
   if byte_count = 0 then []
   else
     let operand_type, operand_size =
@@ -57,17 +57,17 @@ let rec copy_bytes src_val dst_val byte_count =
       else if byte_count < 8 then (Assembly.Longword, 4)
       else (Assembly.Quadword, 8)
     
-    let next_src = add_offset operand_size src_val
-    let next_dst = add_offset operand_size dst_val
+    let next_src = addOffset operand_size src_val
+    let next_dst = addOffset operand_size dst_val
     let bytes_left = byte_count - operand_size
     Assembly.Mov (operand_type, src_val, dst_val)
-    :: copy_bytes next_src next_dst bytes_left
+    :: copyBytes next_src next_dst bytes_left
 
 (* copy an uneven, smaller-than-quadword eightbyte from memory into a register:
  * repeatedly copy byte into register and shift left, starting w/ highest byte and working down to lowest *)
-let copy_bytes_to_reg src_val dst_reg byte_count =
+let copyBytesToReg src_val dst_reg byte_count =
   let copy_byte i =
-    let mv = Assembly.Mov (Assembly.Byte, add_offset i src_val, Assembly.Reg dst_reg) in
+    let mv = Assembly.Mov (Assembly.Byte, addOffset i src_val, Assembly.Reg dst_reg) in
     if i = 0 then [ mv ]
     else
       [ mv; Assembly.Binary { op = Assembly.Shl; t = Assembly.Quadword; src = Assembly.Imm 8L; dst = Assembly.Reg dst_reg } ]
@@ -79,9 +79,9 @@ let copy_bytes_to_reg src_val dst_reg byte_count =
 
 (* copy an uneven, smaller-than-quadword eightbyte from a register into memory;
  * repeatedly copy byte into register and shift right, starting w/ byte 0  and working up *)
-let copy_bytes_from_reg src_reg dst_val byte_count =
+let copyBytesFromReg src_reg dst_val byte_count =
   let copy_byte i =
-    let mv = Assembly.Mov (Assembly.Byte, Assembly.Reg src_reg, add_offset i dst_val) in
+    let mv = Assembly.Mov (Assembly.Byte, Assembly.Reg src_reg, addOffset i dst_val) in
     if i < byte_count - 1 then
         [
           mv;
@@ -92,19 +92,19 @@ let copy_bytes_from_reg src_reg dst_val byte_count =
   
   List.concat (List.init byte_count copy_byte)
 
-let convert_val = function
+let convertVal = function
   | Tacky.Constant (Const.ConstChar c) -> Assembly.Imm (int64 c)
   | Tacky.Constant (Const.ConstUChar uc) -> Assembly.Imm (int64 uc)
   | Tacky.Constant (Const.ConstInt i) -> Assembly.Imm (int64 i)
   | Tacky.Constant (Const.ConstLong l) -> Assembly.Imm l
   | Tacky.Constant (Const.ConstUInt u) -> Assembly.Imm (int64 u)
   | Tacky.Constant (Const.ConstULong ul) -> Assembly.Imm (int64 ul)
-  | Tacky.Constant (Const.ConstDouble d) -> Assembly.Data (add_constant None d, 0)
+  | Tacky.Constant (Const.ConstDouble d) -> Assembly.Data (addConstant None d, 0)
   | Tacky.Var v ->
       if TypeUtils.isScalar (Symbols.get v).symType then Assembly.Pseudo v
       else Assembly.PseudoMem (v, 0)
 
-let convert_type = function
+let convertType = function
   | Types.Int | Types.UInt -> Assembly.Longword
   | Types.Long | Types.ULong | Types.Pointer _ -> Assembly.Quadword
   | Types.Char | Types.SChar | Types.UChar -> Assembly.Byte
@@ -116,15 +116,15 @@ let convert_type = function
       failwith
         ("Internal error, converting type to assembly: " + Types.show t)
 
-let asm_type v = convert_type (Tacky.type_of_val v)
+let asmType v = convertType (Tacky.typeOfVal v)
 
-let convert_unop = function
+let convertUnop = function
   | Tacky.Complement -> Assembly.Not
   | Tacky.Negate -> Assembly.Neg
   | Tacky.Not ->
       failwith "Internal error, can't convert TACKY not directly to assembly"
 
-let convert_binop = function
+let convertBinop = function
   | Tacky.Add -> Assembly.Add
   | Tacky.Subtract -> Assembly.Sub
   | Tacky.Multiply -> Assembly.Mult
@@ -134,7 +134,7 @@ let convert_binop = function
   | Tacky.LessThan ->
       failwith "Internal error: not a binary assembly instruction"
 
-let convert_cond_code signed = function
+let convertCondCode signed = function
   | Tacky.Equal -> Assembly.E
   | Tacky.NotEqual -> Assembly.NE
   | Tacky.GreaterThan -> if signed then Assembly.G else Assembly.A
@@ -145,7 +145,7 @@ let convert_cond_code signed = function
 
 type ParamClass = Mem | SSE | Integer
 
-let classify_new_structure tag =
+let classifyNewStructure tag =
   let { TypeTable.size = size } = TypeTable.find tag
   if size > 16 then
     let eightbyte_count = (size / 8) + if size % 8 = 0 then 0 else 1
@@ -153,7 +153,7 @@ let classify_new_structure tag =
   else
     let rec f = function
       | Types.Structure struct_tag ->
-          let member_types = TypeTable.get_member_types struct_tag
+          let member_types = TypeTable.getMemberTypes struct_tag
           List.collect f member_types
       | Types.Array (elemType, size) ->
           List.concat (ListUtil.makeList (int size) (f elemType))
@@ -168,22 +168,22 @@ let classify_new_structure tag =
     else if first = Types.Double then [ SSE ]
     else [ Integer ]
 
-(* memoize results of classify_structure *)
-let classified_structures = new Dictionary<_,_>()
+(* memoize results of classifyStructure *)
+let classifiedStructures = new Dictionary<_,_>()
 
-let classify_structure tag =
-  match classified_structures.TryGetValue tag with
+let classifyStructure tag =
+  match classifiedStructures.TryGetValue tag with
   | true, classes -> classes
   | false, _ ->
-      let classes = classify_new_structure tag
-      classified_structures.Add(tag, classes)
+      let classes = classifyNewStructure tag
+      classifiedStructures.Add(tag, classes)
       classes
 
-let classify_params_helper typed_asm_vals return_on_stack =
+let classifyParamsHelper typed_asm_vals return_on_stack =
   let int_regs_available = if return_on_stack then 5 else 6
   let process_one_param (int_reg_args, dbl_reg_args, stack_args)
       (tacky_t, operand) =
-    let t = convert_type tacky_t
+    let t = convertType tacky_t
     let typed_operand = (t, operand)
     match tacky_t with
     | Types.Structure s ->
@@ -194,7 +194,7 @@ let classify_params_helper typed_asm_vals return_on_stack =
           | _ -> failwith "Bad structure operand"
         
         let var_size = int (TypeUtils.getSize tacky_t)
-        let classes = classify_structure s
+        let classes = classifyStructure s
         let updated_int, updated_dbl, use_stack =
           if List.head classes = Mem then
             (* all eightbytes go on the stack*)
@@ -207,7 +207,7 @@ let classify_params_helper typed_asm_vals return_on_stack =
               | SSE -> (i + 1, tentative_ints, operand :: tentative_dbls)
               | Integer ->
                   let eightbyte_type =
-                    get_eightbyte_type i var_size
+                    getEightbyteType i var_size
                   in
                   ( i + 1,
                     (eightbyte_type, operand) :: tentative_ints,
@@ -232,7 +232,7 @@ let classify_params_helper typed_asm_vals return_on_stack =
         
         let add_stack_args stk i =
           let eightbyte_type =
-            get_eightbyte_type i var_size
+            getEightbyteType i var_size
           in
           (eightbyte_type, Assembly.PseudoMem (var_name, i * 8)) :: stk
         
@@ -259,26 +259,26 @@ let classify_params_helper typed_asm_vals return_on_stack =
   in
   (List.rev reversed_int, List.rev reversed_dbl, List.rev reversed_stack)
 
-let classify_parameters params_ return_on_stack =
-  let f v = (Tacky.type_of_val v, convert_val v) in
-  classify_params_helper (List.map f params_) return_on_stack
+let classifyParameters params_ return_on_stack =
+  let f v = (Tacky.typeOfVal v, convertVal v) in
+  classifyParamsHelper (List.map f params_) return_on_stack
 
-let classify_param_types type_list return_on_stack =
+let classifyParamTypes type_list return_on_stack =
   let f t =
     if TypeUtils.isScalar t then (t, Assembly.Pseudo "dummy")
     else (t, Assembly.PseudoMem ("dummy", 0))
   in
   let ints, dbls, _ =
-    classify_params_helper (List.map f type_list) return_on_stack
+    classifyParamsHelper (List.map f type_list) return_on_stack
   in
-  let int_regs = ListUtil.take (List.length ints) int_param_passing_regs in
-  let dbl_regs = ListUtil.take (List.length dbls) dbl_param_passing_regs in
+  let int_regs = ListUtil.take (List.length ints) intParamPassingRegs in
+  let dbl_regs = ListUtil.take (List.length dbls) dblParamPassingRegs in
   int_regs @ dbl_regs
 
-let classify_return_helper ret_type asm_retval =
+let classifyReturnHelper ret_type asm_retval =
   match ret_type with
   | Types.Structure tag ->
-      let classes = classify_structure tag in
+      let classes = classifyStructure tag in
       let var_name =
         match asm_retval with
         | Assembly.PseudoMem (n, 0) -> n
@@ -295,7 +295,7 @@ let classify_return_helper ret_type asm_retval =
           | SSE -> (i + 1, ints, dbls @ [ operand ])
           | Integer ->
               let eightbyte_type =
-                get_eightbyte_type i
+                getEightbyteType i
                   (int (TypeUtils.getSize ret_type))
               in
               (i + 1, ints @ [ (eightbyte_type, operand) ], dbls)
@@ -308,20 +308,20 @@ let classify_return_helper ret_type asm_retval =
         (i, d, false)
   | Types.Double -> ([], [ asm_retval ], false)
   | t ->
-      let typed_operand = (convert_type t, asm_retval) in
+      let typed_operand = (convertType t, asm_retval) in
       ([ typed_operand ], [], false)
 
-let classify_return_value retval =
-  classify_return_helper (Tacky.type_of_val retval) (convert_val retval)
+let classifyReturnValue retval =
+  classifyReturnHelper (Tacky.typeOfVal retval) (convertVal retval)
 
-let classify_return_type = function
+let classifyReturnType = function
   | Types.Void -> ([], false)
   | t ->
       let asm_val =
         if TypeUtils.isScalar t then Assembly.Pseudo "dummy"
         else Assembly.PseudoMem ("dummy", 0)
       in
-      let ints, dbls, return_on_stack = classify_return_helper t asm_val in
+      let ints, dbls, return_on_stack = classifyReturnHelper t asm_val in
       if return_on_stack then ([ Assembly.AX ], true)
       else
         let int_regs = ListUtil.take (List.length ints) [ Assembly.AX; Assembly.DX ] in
@@ -330,19 +330,19 @@ let classify_return_type = function
         in
         (int_regs @ dbl_regs, false)
 
-let convert_function_call f args dst =
+let convertFunctionCall f args dst =
   let int_retvals, dbl_retvals, return_on_stack =
-    match dst with Some d -> classify_return_value d | None -> ([], [], false)
+    match dst with Some d -> classifyReturnValue d | None -> ([], [], false)
   in
   (* load address of dest into DI *)
   let load_dst_instruction, first_intreg_idx =
     if return_on_stack then
-      ([ Assembly.Lea (convert_val (Option.get dst), Assembly.Reg Assembly.DI) ], 1)
+      ([ Assembly.Lea (convertVal (Option.get dst), Assembly.Reg Assembly.DI) ], 1)
     else ([], 0)
   in
 
   let int_reg_args, dbl_reg_args, stack_args =
-    classify_parameters args return_on_stack
+    classifyParameters args return_on_stack
   in
 
   (* adjust stack alignment *)
@@ -363,10 +363,10 @@ let convert_function_call f args dst =
   let instructions = load_dst_instruction @ alignment_instruction in
   (* pass args in registers *)
   let pass_int_reg_arg idx (arg_t, arg) =
-    let r = List.item (idx + first_intreg_idx) int_param_passing_regs in
+    let r = List.item (idx + first_intreg_idx) intParamPassingRegs in
     match arg_t with
     | Assembly.ByteArray { size = size } ->
-        copy_bytes_to_reg arg r size (* copy_thru_redzone arg r size *)
+        copyBytesToReg arg r size (* copy_thru_redzone arg r size *)
     | _ -> [ Assembly.Mov (arg_t, arg, Assembly.Reg r) ]
   in
   let instructions =
@@ -375,7 +375,7 @@ let convert_function_call f args dst =
 
   (* pass args in registers *)
   let pass_dbl_reg_arg idx arg =
-    let r = List.item idx dbl_param_passing_regs in
+    let r = List.item idx dblParamPassingRegs in
     Assembly.Mov (Assembly.Double, arg, Assembly.Reg r)
   in
   let instructions = instructions @ List.mapi pass_dbl_reg_arg dbl_reg_args in
@@ -388,7 +388,7 @@ let convert_function_call f args dst =
     | _, Assembly.ByteArray { size = size } ->
         Assembly.Binary
           { op = Assembly.Sub; t = Assembly.Quadword; src = Assembly.Imm (int64 8); dst = Assembly.Reg Assembly.SP }
-        :: copy_bytes arg (Assembly.Memory (Assembly.SP, 0)) size
+        :: copyBytes arg (Assembly.Memory (Assembly.SP, 0)) size
     | _ ->
         (* copy into a register before pushing *)
         [ Assembly.Mov (arg_t, arg, Assembly.Reg Assembly.AX); Assembly.Push (Assembly.Reg Assembly.AX) ]
@@ -427,7 +427,7 @@ let convert_function_call f args dst =
           let r = List.item i int_ret_regs in
           match t with
           | Assembly.ByteArray { size = size } ->
-              copy_bytes_from_reg r op size
+              copyBytesFromReg r op size
           | _ -> [ Assembly.Mov (t, Assembly.Reg r, op) ]
         in
         let get_dbl i op =
@@ -440,15 +440,15 @@ let convert_function_call f args dst =
   in
   instructions @ retrieve_result
 
-let convert_return_instruction = function
+let convertReturnInstruction = function
   | None -> [ Assembly.Ret ]
   | Some v ->
-      let int_retvals, dbl_retvals, return_on_stack = classify_return_value v in
+      let int_retvals, dbl_retvals, return_on_stack = classifyReturnValue v in
       if return_on_stack then
-        let byte_count = int (TypeUtils.getSize (Tacky.type_of_val v)) in
+        let byte_count = int (TypeUtils.getSize (Tacky.typeOfVal v)) in
         let get_ptr = Assembly.Mov (Assembly.Quadword, Assembly.Memory (Assembly.BP, -8), Assembly.Reg Assembly.AX) in
         let copy_into_ptr =
-          copy_bytes (convert_val v) (Assembly.Memory (Assembly.AX, 0)) byte_count
+          copyBytes (convertVal v) (Assembly.Memory (Assembly.AX, 0)) byte_count
         in
         (get_ptr :: copy_into_ptr) @ [ Assembly.Ret ]
       else
@@ -459,7 +459,7 @@ let convert_return_instruction = function
                  let dst_reg = List.item i [ Assembly.AX; Assembly.DX ] in
                  match t with
                  | Assembly.ByteArray { size = size } ->
-                     copy_bytes_to_reg op dst_reg
+                     copyBytesToReg op dst_reg
                        size (* copy_thru_redzone op dst_reg size *)
                  | _ -> [ Assembly.Mov (t, op, Assembly.Reg dst_reg) ])
                int_retvals)
@@ -471,24 +471,24 @@ let convert_return_instruction = function
         in
         return_ints @ return_dbls @ [ Assembly.Ret ]
 
-let convert_instruction = function
-  | Tacky.Copy { src = src; dst = dst } when TypeUtils.isScalar (Tacky.type_of_val src) ->
-      let t = asm_type src in
-      let asm_src = convert_val src in
-      let asm_dst = convert_val dst in
+let convertInstruction = function
+  | Tacky.Copy { src = src; dst = dst } when TypeUtils.isScalar (Tacky.typeOfVal src) ->
+      let t = asmType src in
+      let asm_src = convertVal src in
+      let asm_dst = convertVal dst in
       [ Assembly.Mov (t, asm_src, asm_dst) ]
   | Tacky.Copy { src = src; dst = dst } ->
-      let asm_src = convert_val src in
-      let asm_dst = convert_val dst in
-      let byte_count = int (TypeUtils.getSize (Tacky.type_of_val src)) in
-      copy_bytes asm_src asm_dst byte_count
-  | Tacky.Return maybe_val -> convert_return_instruction maybe_val
+      let asm_src = convertVal src in
+      let asm_dst = convertVal dst in
+      let byte_count = int (TypeUtils.getSize (Tacky.typeOfVal src)) in
+      copyBytes asm_src asm_dst byte_count
+  | Tacky.Return maybe_val -> convertReturnInstruction maybe_val
   | Tacky.Unary { op = Tacky.Not; src = src; dst = dst } ->
-      let src_t = asm_type src in
-      let dst_t = asm_type dst in
+      let src_t = asmType src in
+      let dst_t = asmType dst in
 
-      let asm_src = convert_val src in
-      let asm_dst = convert_val dst in
+      let asm_src = convertVal src in
+      let asm_dst = convertVal dst in
       if src_t = Assembly.Double then
         [
           Assembly.Binary
@@ -503,36 +503,36 @@ let convert_instruction = function
           Assembly.Mov (dst_t, zero, asm_dst);
           Assembly.SetCC (Assembly.E, asm_dst);
         ]
-  | Tacky.Unary { op = Tacky.Negate; src = src; dst = dst } when Tacky.type_of_val src = Types.Double ->
-      let asm_src = convert_val src in
-      let asm_dst = convert_val dst in
-      let negative_zero = add_constant (Some 16) (-0.0) in
+  | Tacky.Unary { op = Tacky.Negate; src = src; dst = dst } when Tacky.typeOfVal src = Types.Double ->
+      let asm_src = convertVal src in
+      let asm_dst = convertVal dst in
+      let negative_zero = addConstant (Some 16) (-0.0) in
       [
         Assembly.Mov (Assembly.Double, asm_src, asm_dst);
         Assembly.Binary
           { op = Assembly.Xor; t = Assembly.Double; src = Assembly.Data (negative_zero, 0); dst = asm_dst };
       ]
   | Tacky.Unary { op = op; src = src; dst = dst } ->
-      let t = asm_type src in
-      let asm_op = convert_unop op in
-      let asm_src = convert_val src in
-      let asm_dst = convert_val dst in
+      let t = asmType src in
+      let asm_op = convertUnop op in
+      let asm_src = convertVal src in
+      let asm_dst = convertVal dst in
       [ Assembly.Mov (t, asm_src, asm_dst); Assembly.Unary (asm_op, t, asm_dst) ]
   | Tacky.Binary { op = op; src1 = src1; src2 = src2; dst = dst } -> (
-      let src_t = asm_type src1 in
-      let dst_t = asm_type dst in
-      let asm_src1 = convert_val src1 in
-      let asm_src2 = convert_val src2 in
-      let asm_dst = convert_val dst in
+      let src_t = asmType src1 in
+      let dst_t = asmType dst in
+      let asm_src1 = convertVal src1 in
+      let asm_src2 = convertVal src2 in
+      let asm_dst = convertVal dst in
       match op with
       (* Relational operator *)
       | Tacky.Equal | Tacky.NotEqual | Tacky.GreaterThan | Tacky.GreaterOrEqual | Tacky.LessThan | Tacky.LessOrEqual
         ->
           let signed =
             if src_t = Assembly.Double then false
-            else TypeUtils.isSigned (Tacky.type_of_val src1)
+            else TypeUtils.isSigned (Tacky.typeOfVal src1)
           in
-          let cond_code = convert_cond_code signed op in
+          let cond_code = convertCondCode signed op in
           [
             Assembly.Cmp (src_t, asm_src2, asm_src1);
             Assembly.Mov (dst_t, zero, asm_dst);
@@ -541,7 +541,7 @@ let convert_instruction = function
       (* Division/modulo *)
       | (Tacky.Divide | Tacky.Mod) when src_t <> Assembly.Double ->
           let result_reg = if op = Tacky.Divide then Assembly.AX else Assembly.DX in
-          if TypeUtils.isSigned (Tacky.type_of_val src1) then
+          if TypeUtils.isSigned (Tacky.typeOfVal src1) then
             [
               Assembly.Mov (src_t, asm_src1, Assembly.Reg Assembly.AX);
               Assembly.Cdq src_t;
@@ -557,43 +557,43 @@ let convert_instruction = function
             ]
           (* Addition/subtraction/multiplication*)
       | _ ->
-          let asm_op = convert_binop op in
+          let asm_op = convertBinop op in
           [
             Assembly.Mov (src_t, asm_src1, asm_dst);
             Assembly.Binary { op = asm_op; t = src_t; src = asm_src2; dst = asm_dst };
           ])
   | Tacky.Load loadInfo
-    when TypeUtils.isScalar (Tacky.type_of_val loadInfo.dst) ->
-      let asm_src_ptr = convert_val loadInfo.src_ptr in
-      let asm_dst = convert_val loadInfo.dst in
-      let t = asm_type loadInfo.dst in
+    when TypeUtils.isScalar (Tacky.typeOfVal loadInfo.dst) ->
+      let asm_src_ptr = convertVal loadInfo.src_ptr in
+      let asm_dst = convertVal loadInfo.dst in
+      let t = asmType loadInfo.dst in
       [ Assembly.Mov (Assembly.Quadword, asm_src_ptr, Assembly.Reg Assembly.R9); Assembly.Mov (t, Assembly.Memory (Assembly.R9, 0), asm_dst) ]
   | Tacky.Load loadInfo ->
-      let asm_src_ptr = convert_val loadInfo.src_ptr in
-      let asm_dst = convert_val loadInfo.dst in
-      let byte_count = int (TypeUtils.getSize (Tacky.type_of_val loadInfo.dst)) in
+      let asm_src_ptr = convertVal loadInfo.src_ptr in
+      let asm_dst = convertVal loadInfo.dst in
+      let byte_count = int (TypeUtils.getSize (Tacky.typeOfVal loadInfo.dst)) in
       Assembly.Mov (Assembly.Quadword, asm_src_ptr, Assembly.Reg Assembly.R9)
-      :: copy_bytes (Assembly.Memory (Assembly.R9, 0)) asm_dst byte_count
+      :: copyBytes (Assembly.Memory (Assembly.R9, 0)) asm_dst byte_count
   | Tacky.Store storeInfo
-    when TypeUtils.isScalar (Tacky.type_of_val storeInfo.src) ->
-      let asm_src = convert_val storeInfo.src in
-      let t = asm_type storeInfo.src in
-      let asm_dst_ptr = convert_val storeInfo.dst_ptr in
+    when TypeUtils.isScalar (Tacky.typeOfVal storeInfo.src) ->
+      let asm_src = convertVal storeInfo.src in
+      let t = asmType storeInfo.src in
+      let asm_dst_ptr = convertVal storeInfo.dst_ptr in
       [ Assembly.Mov (Assembly.Quadword, asm_dst_ptr, Assembly.Reg Assembly.R9); Assembly.Mov (t, asm_src, Assembly.Memory (Assembly.R9, 0)) ]
   | Tacky.Store storeInfo ->
-      let asm_src = convert_val storeInfo.src in
-      let asm_dst_ptr = convert_val storeInfo.dst_ptr in
-      let byte_count = int (TypeUtils.getSize (Tacky.type_of_val storeInfo.src)) in
+      let asm_src = convertVal storeInfo.src in
+      let asm_dst_ptr = convertVal storeInfo.dst_ptr in
+      let byte_count = int (TypeUtils.getSize (Tacky.typeOfVal storeInfo.src)) in
       Assembly.Mov (Assembly.Quadword, asm_dst_ptr, Assembly.Reg Assembly.R9)
-      :: copy_bytes asm_src (Assembly.Memory (Assembly.R9, 0)) byte_count
+      :: copyBytes asm_src (Assembly.Memory (Assembly.R9, 0)) byte_count
   | Tacky.GetAddress { src = src; dst = dst } ->
-      let asm_src = convert_val src in
-      let asm_dst = convert_val dst in
+      let asm_src = convertVal src in
+      let asm_dst = convertVal dst in
       [ Assembly.Lea (asm_src, asm_dst) ]
   | Tacky.Jump target -> [ Assembly.Jmp target ]
   | Tacky.JumpIfZero (cond, target) ->
-      let t = asm_type cond in
-      let asm_cond = convert_val cond in
+      let t = asmType cond in
+      let asm_cond = convertVal cond in
       if t = Assembly.Double then
         [
           Assembly.Binary
@@ -603,8 +603,8 @@ let convert_instruction = function
         ]
       else [ Assembly.Cmp (t, zero, asm_cond); Assembly.JmpCC (Assembly.E, target) ]
   | Tacky.JumpIfNotZero (cond, target) ->
-      let t = asm_type cond in
-      let asm_cond = convert_val cond in
+      let t = asmType cond in
+      let asm_cond = convertVal cond in
       if t = Assembly.Double then
         [
           Assembly.Binary
@@ -614,39 +614,39 @@ let convert_instruction = function
         ]
       else [ Assembly.Cmp (t, zero, asm_cond); Assembly.JmpCC (Assembly.NE, target) ]
   | Tacky.Label l -> [ Assembly.Label l ]
-  | Tacky.FunCall { f = f; args = args; dst = dst } -> convert_function_call f args dst
+  | Tacky.FunCall { f = f; args = args; dst = dst } -> convertFunctionCall f args dst
   | Tacky.SignExtend { src = src; dst = dst } ->
-      let asm_src = convert_val src in
-      let asm_dst = convert_val dst in
+      let asm_src = convertVal src in
+      let asm_dst = convertVal dst in
       [
         Assembly.Movsx
           {
-            src_type = asm_type src;
-            dst_type = asm_type dst;
+            src_type = asmType src;
+            dst_type = asmType dst;
             src = asm_src;
             dst = asm_dst;
           };
       ]
   | Tacky.Truncate { src = src; dst = dst } ->
-      let asm_src = convert_val src in
-      let asm_dst = convert_val dst in
-      [ Assembly.Mov (asm_type dst, asm_src, asm_dst) ]
+      let asm_src = convertVal src in
+      let asm_dst = convertVal dst in
+      [ Assembly.Mov (asmType dst, asm_src, asm_dst) ]
   | Tacky.ZeroExtend { src = src; dst = dst } ->
-      let asm_src = convert_val src in
-      let asm_dst = convert_val dst in
+      let asm_src = convertVal src in
+      let asm_dst = convertVal dst in
       [
         Assembly.MovZeroExtend
           {
-            src_type = asm_type src;
-            dst_type = asm_type dst;
+            src_type = asmType src;
+            dst_type = asmType dst;
             src = asm_src;
             dst = asm_dst;
           };
       ]
   | Tacky.IntToDouble { src = src; dst = dst } ->
-      let asm_src = convert_val src in
-      let asm_dst = convert_val dst in
-      let t = asm_type src in
+      let asm_src = convertVal src in
+      let asm_dst = convertVal dst in
+      let t = asmType src in
       if t = Assembly.Byte then
         [
           Assembly.Movsx
@@ -660,16 +660,16 @@ let convert_instruction = function
         ]
       else [ Assembly.Cvtsi2sd (t, asm_src, asm_dst) ]
   | Tacky.DoubleToInt { src = src; dst = dst } ->
-      let asm_src = convert_val src in
-      let asm_dst = convert_val dst in
-      let t = asm_type dst in
+      let asm_src = convertVal src in
+      let asm_dst = convertVal dst in
+      let t = asmType dst in
       if t = Assembly.Byte then
         [ Assembly.Cvttsd2si (Assembly.Longword, asm_src, Assembly.Reg Assembly.R9); Assembly.Mov (Assembly.Byte, Assembly.Reg Assembly.R9, asm_dst) ]
       else [ Assembly.Cvttsd2si (t, asm_src, asm_dst) ]
   | Tacky.UIntToDouble { src = src; dst = dst } ->
-      let asm_src = convert_val src in
-      let asm_dst = convert_val dst in
-      if Tacky.type_of_val src = Types.UChar then
+      let asm_src = convertVal src in
+      let asm_dst = convertVal dst in
+      if Tacky.typeOfVal src = Types.UChar then
         [
           Assembly.MovZeroExtend
             {
@@ -680,7 +680,7 @@ let convert_instruction = function
             };
           Assembly.Cvtsi2sd (Assembly.Longword, Assembly.Reg Assembly.R9, asm_dst);
         ]
-      else if Tacky.type_of_val src = Types.UInt then
+      else if Tacky.typeOfVal src = Types.UInt then
         [
           Assembly.MovZeroExtend
             {
@@ -716,11 +716,11 @@ let convert_instruction = function
           Assembly.Label end_lbl;
         ]
   | Tacky.DoubleToUInt { src = src; dst = dst } ->
-      let asm_src = convert_val src in
-      let asm_dst = convert_val dst in
-      if Tacky.type_of_val dst = Types.UChar then
+      let asm_src = convertVal src in
+      let asm_dst = convertVal dst in
+      if Tacky.typeOfVal dst = Types.UChar then
         [ Assembly.Cvttsd2si (Assembly.Longword, asm_src, Assembly.Reg Assembly.R9); Assembly.Mov (Assembly.Byte, Assembly.Reg Assembly.R9, asm_dst) ]
-      else if Tacky.type_of_val dst = Types.UInt then
+      else if Tacky.typeOfVal dst = Types.UInt then
           [
             Assembly.Cvttsd2si (Assembly.Quadword, asm_src, Assembly.Reg Assembly.R9);
             Assembly.Mov (Assembly.Longword, Assembly.Reg Assembly.R9, asm_dst);
@@ -728,7 +728,7 @@ let convert_instruction = function
       else
         let out_of_bounds = UniqueIds.makeLabel "dbl2ulong.oob" in
         let end_lbl = UniqueIds.makeLabel "dbl2ulong.end" in
-        let upper_bound = add_constant None 9223372036854775808.0 in
+        let upper_bound = addConstant None 9223372036854775808.0 in
         let upper_bound_as_int =
           (* interpreted as signed integer, upper bound wraps around to become
              minimum int *)
@@ -749,40 +749,40 @@ let convert_instruction = function
           Assembly.Label end_lbl;
         ]
   | Tacky.CopyToOffset { src = src; dst = dst; offset = offset }
-    when TypeUtils.isScalar (Tacky.type_of_val src) ->
-      [ Assembly.Mov (asm_type src, convert_val src, Assembly.PseudoMem (dst, offset)) ]
+    when TypeUtils.isScalar (Tacky.typeOfVal src) ->
+      [ Assembly.Mov (asmType src, convertVal src, Assembly.PseudoMem (dst, offset)) ]
   | Tacky.CopyToOffset { src = src; dst = dst; offset = offset } ->
-      let asm_src = convert_val src in
+      let asm_src = convertVal src in
       let asm_dst = Assembly.PseudoMem (dst, offset) in
-      let byte_count = int (TypeUtils.getSize (Tacky.type_of_val src)) in
-      copy_bytes asm_src asm_dst byte_count
+      let byte_count = int (TypeUtils.getSize (Tacky.typeOfVal src)) in
+      copyBytes asm_src asm_dst byte_count
   | Tacky.CopyFromOffset { src = src; dst = dst; offset = offset }
-    when TypeUtils.isScalar (Tacky.type_of_val dst) ->
-      [ Assembly.Mov (asm_type dst, Assembly.PseudoMem (src, offset), convert_val dst) ]
+    when TypeUtils.isScalar (Tacky.typeOfVal dst) ->
+      [ Assembly.Mov (asmType dst, Assembly.PseudoMem (src, offset), convertVal dst) ]
   | Tacky.CopyFromOffset { src = src; dst = dst; offset = offset } ->
       let asm_src = Assembly.PseudoMem (src, offset) in
-      let asm_dst = convert_val dst in
-      let byte_count = int (TypeUtils.getSize (Tacky.type_of_val dst)) in
-      copy_bytes asm_src asm_dst byte_count
+      let asm_dst = convertVal dst in
+      let byte_count = int (TypeUtils.getSize (Tacky.typeOfVal dst)) in
+      copyBytes asm_src asm_dst byte_count
   | Tacky.AddPtr { ptr = ptr; index = Tacky.Constant (Const.ConstLong c); scale = scale; dst = dst } ->
       (* note that typechecker converts index to long. QUESTION: what's the
          largest offset we should support? *)
       let i = int c
       [
-        Assembly.Mov (Assembly.Quadword, convert_val ptr, Assembly.Reg Assembly.R9);
-        Assembly.Lea (Assembly.Memory (Assembly.R9, i * scale), convert_val dst);
+        Assembly.Mov (Assembly.Quadword, convertVal ptr, Assembly.Reg Assembly.R9);
+        Assembly.Lea (Assembly.Memory (Assembly.R9, i * scale), convertVal dst);
       ]
   | Tacky.AddPtr { ptr = ptr; index = index; scale = scale; dst = dst } ->
       if scale = 1 || scale = 2 || scale = 4 || scale = 8 then
         [
-          Assembly.Mov (Assembly.Quadword, convert_val ptr, Assembly.Reg Assembly.R8);
-          Assembly.Mov (Assembly.Quadword, convert_val index, Assembly.Reg Assembly.R9);
-          Assembly.Lea (Assembly.Indexed { ``base`` = Assembly.R8; index = Assembly.R9; scale = scale }, convert_val dst);
+          Assembly.Mov (Assembly.Quadword, convertVal ptr, Assembly.Reg Assembly.R8);
+          Assembly.Mov (Assembly.Quadword, convertVal index, Assembly.Reg Assembly.R9);
+          Assembly.Lea (Assembly.Indexed { ``base`` = Assembly.R8; index = Assembly.R9; scale = scale }, convertVal dst);
         ]
       else
         [
-          Assembly.Mov (Assembly.Quadword, convert_val ptr, Assembly.Reg Assembly.R8);
-          Assembly.Mov (Assembly.Quadword, convert_val index, Assembly.Reg Assembly.R9);
+          Assembly.Mov (Assembly.Quadword, convertVal ptr, Assembly.Reg Assembly.R8);
+          Assembly.Mov (Assembly.Quadword, convertVal index, Assembly.Reg Assembly.R9);
           Assembly.Binary
             {
               op = Assembly.Mult;
@@ -790,36 +790,36 @@ let convert_instruction = function
               src = Assembly.Imm (int64 scale);
               dst = Assembly.Reg Assembly.R9;
             };
-          Assembly.Lea (Assembly.Indexed { ``base`` = Assembly.R8; index = Assembly.R9; scale = 1 }, convert_val dst);
+          Assembly.Lea (Assembly.Indexed { ``base`` = Assembly.R8; index = Assembly.R9; scale = 1 }, convertVal dst);
         ]
 
-let pass_params param_list return_on_stack =
+let passParams param_list return_on_stack =
   let int_reg_params, dbl_reg_params, stack_params =
-    classify_parameters param_list return_on_stack
+    classifyParameters param_list return_on_stack
   in
   let copy_dst_ptr, remaining_int_regs =
     if return_on_stack then
       ( [ Assembly.Mov (Assembly.Quadword, Assembly.Reg Assembly.DI, Assembly.Memory (Assembly.BP, -8)) ],
-        List.tail int_param_passing_regs )
-    else ([], int_param_passing_regs)
+        List.tail intParamPassingRegs )
+    else ([], intParamPassingRegs)
   in
   (* pass parameter in register *)
   let pass_in_int_register idx (param_t, param) =
     let r = List.item idx remaining_int_regs in
     match param_t with
     | Assembly.ByteArray { size = size } ->
-        copy_bytes_from_reg r param size
+        copyBytesFromReg r param size
     | _ -> [ Assembly.Mov (param_t, Assembly.Reg r, param) ]
   in
   let pass_in_dbl_register idx param =
-    let r = List.item idx dbl_param_passing_regs in
+    let r = List.item idx dblParamPassingRegs in
     Assembly.Mov (Assembly.Double, Assembly.Reg r, param)
   in
   let pass_on_stack idx (param_t, param) =
     (* first param passed on stack has idx 0 and is passed at 16(%rbp) *)
     let stk = Assembly.Memory (Assembly.BP, 16 + (8 * idx)) in
     match param_t with
-    | Assembly.ByteArray { size = size } -> copy_bytes stk param size
+    | Assembly.ByteArray { size = size } -> copyBytes stk param size
     | _ -> [ Assembly.Mov (param_t, stk, param) ]
   in
   copy_dst_ptr
@@ -827,85 +827,85 @@ let pass_params param_list return_on_stack =
   @ List.mapi pass_in_dbl_register dbl_reg_params
   @ List.concat (List.mapi pass_on_stack stack_params)
 
-let returns_on_stack fn_name =
+let returnsOnStack fn_name =
   match (Symbols.get fn_name).symType with
   | Types.FunType (_, Types.Structure tag) -> (
-      match classify_structure tag with Mem :: _ -> true | _ -> false)
+      match classifyStructure tag with Mem :: _ -> true | _ -> false)
   | Types.FunType _ -> false
   | _ -> failwith "Internal error: not a function name"
 
 (* Special-case logic to get type/alignment of array; array variables w/ size
    >=16 bytes have alignment of 16 *)
-let get_var_alignment = function
+let getVarAlignment = function
   | Types.Array _ as t when int (TypeUtils.getSize t) >= 16 -> 16
   | t -> TypeUtils.getAlignment t
 
-let convert_var_type = function
+let convertVarType = function
   | Types.Array _ as t ->
       Assembly.ByteArray
-        { size = int (TypeUtils.getSize t); alignment = get_var_alignment t }
-  | other -> convert_type other
+        { size = int (TypeUtils.getSize t); alignment = getVarAlignment t }
+  | other -> convertType other
 
-let convert_top_level = function
+let convertTopLevel = function
   | Tacky.Function { name = name; ``global`` = ``global``; body = body; ``params`` = params_ } ->
-      let return_on_stack = returns_on_stack name in
+      let return_on_stack = returnsOnStack name in
       let params_as_tacky = List.map (fun name -> Tacky.Var name) params_ in
       let instructions =
-        pass_params params_as_tacky return_on_stack
-        @ List.collect convert_instruction body
+        passParams params_as_tacky return_on_stack
+        @ List.collect convertInstruction body
       in
       Assembly.Function { name = name; ``global`` = ``global``; instructions = instructions }
   | Tacky.StaticVariable { name = name; ``global`` = ``global``; t = t; init = init } ->
       Assembly.StaticVariable
-        { name = name; ``global`` = ``global``; alignment = get_var_alignment t; init = init }
+        { name = name; ``global`` = ``global``; alignment = getVarAlignment t; init = init }
   | Tacky.StaticConstant { name = name; t = t; init = init } ->
       Assembly.StaticConstant
         { name = name; alignment = TypeUtils.getAlignment t; init = init }
 
-let convert_constant (kvp: KeyValuePair<int64, string * int>) =
+let convertConstant (kvp: KeyValuePair<int64, string * int>) =
   let key = kvp.Key
   let (name, alignment) = kvp.Value
   let dbl = System.BitConverter.Int64BitsToDouble key
-  AssemblySymbols.add_constant name Assembly.Double
+  AssemblySymbols.addConstant name Assembly.Double
   Assembly.StaticConstant
     { name = name; alignment = alignment; init = Initializers.DoubleInit dbl }
 
 (* convert each symbol table entry to assembly symbol table equivalent*)
-let convert_symbol name = function
+let convertSymbol name = function
   | { Symbols.symType = Types.FunType (paramTypes, retType);
       Symbols.attrs = Symbols.FunAttr { defined = defined };
     }
     when (TypeUtils.isComplete retType || retType = Types.Void)
          && List.forall TypeUtils.isComplete paramTypes ->
-      let ret_regs, return_on_stack = classify_return_type retType in
+      let ret_regs, return_on_stack = classifyReturnType retType in
 
-      let param_regs = classify_param_types paramTypes return_on_stack in
-      AssemblySymbols.add_fun name defined (returns_on_stack name) param_regs
+      let param_regs = classifyParamTypes paramTypes return_on_stack in
+      AssemblySymbols.addFun name defined (returnsOnStack name) param_regs
         ret_regs
   | { Symbols.symType = Types.FunType _; Symbols.attrs = Symbols.FunAttr { defined = defined } } ->
       (* If this function has incomplete return type besides void, or any incomplete
        * param type (implying we don't define or call it in this translation unit)
        * use dummy values *)
       assert (not defined)
-      AssemblySymbols.add_fun name defined false [] []
+      AssemblySymbols.addFun name defined false [] []
   | { Symbols.symType = t; attrs = Symbols.ConstAttr _ } ->
-      AssemblySymbols.add_constant name (convert_type t)
+      AssemblySymbols.addConstant name (convertType t)
   (* use dummy type for static variables of incomplete type *)
   | { Symbols.symType = t; attrs = Symbols.StaticAttr _ } when not (TypeUtils.isComplete t) ->
-      AssemblySymbols.add_var name Assembly.Byte true
+      AssemblySymbols.addVar name Assembly.Byte true
   | { Symbols.symType = t; attrs = Symbols.StaticAttr _ } ->
-      AssemblySymbols.add_var name (convert_var_type t) true
-  | { Symbols.symType = t } -> AssemblySymbols.add_var name (convert_var_type t) false
+      AssemblySymbols.addVar name (convertVarType t) true
+  | { Symbols.symType = t } -> AssemblySymbols.addVar name (convertVarType t) false
 
 let gen (Tacky.Program top_levels) =
   (* clear the hashtable (necessary if we're compiling multiple source) *)
   constants.Clear()
-  let tls = List.map convert_top_level top_levels
+  let tls = List.map convertTopLevel top_levels
   let constants_list =
     constants
-    |> Seq.map convert_constant
+    |> Seq.map convertConstant
     |> List.ofSeq
   
   let prog = Assembly.Program (constants_list @ tls)
-  let _ = Symbols.iter convert_symbol
+  let _ = Symbols.iter convertSymbol
   prog

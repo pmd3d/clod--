@@ -12,20 +12,20 @@ type StructDef = {
     members: Map<string, MemberDef>
 }
 
-let type_table: Dictionary<string, StructDef> = Dictionary<string, StructDef>(20)
+let typeTable: Dictionary<string, StructDef> = Dictionary<string, StructDef>(20)
 
-let add_struct_definition tag struct_def =
-    type_table.[tag] <- struct_def
+let addStructDefinition tag structDef =
+    typeTable.[tag] <- structDef
 
-let mem tag = type_table.ContainsKey(tag)
-let find tag = type_table.[tag]
+let mem tag = typeTable.ContainsKey(tag)
+let find tag = typeTable.[tag]
 
-let get_members tag =
-    let struct_def = find tag
-    let compare_offset m1 m2 = compare m1.offset m2.offset
-    struct_def.members
+let getMembers tag =
+    let structDef = find tag
+    let compareOffset m1 m2 = compare m1.offset m2.offset
+    structDef.members
     |> Map.toList
     |> List.map snd
-    |> List.sortWith compare_offset
+    |> List.sortWith compareOffset
 
-let get_member_types tag = List.map (fun m -> m.member_type) (get_members tag)
+let getMemberTypes tag = List.map (fun m -> m.member_type) (getMembers tag)

@@ -57,66 +57,66 @@ type BasicBlock<'v, 'instr> = {
 type ControlFlowGraph<'v, 'instr> = {
     (* store basic blocks in association list, indexed by block # *)
     BasicBlocks: (int * BasicBlock<'v, 'instr>) list
-    mutable entry_succs: NodeId list
-    mutable exit_preds: NodeId list
-    debug_label: string
+    mutable entrySuccs: NodeId list
+    mutable exitPreds: NodeId list
+    debugLabel: string
 }
 
-let get_succs nd_id cfg =
-    match nd_id with
-    | Entry -> cfg.entry_succs
+let getSuccs ndId cfg =
+    match ndId with
+    | Entry -> cfg.entrySuccs
     | Block n ->
         let nd = List.find (fun (k, _) -> k = n) cfg.BasicBlocks |> snd
         nd.succs
     | Exit -> []
 
-let get_block_value blocknum cfg =
+let getBlockValue blocknum cfg =
     let nd =
         List.find (fun (k, _) -> k = blocknum) cfg.BasicBlocks |> snd
     nd.value
 
-let private update_successors f nd_id g =
-    match nd_id with
-    | Entry -> g.entry_succs <- f g.entry_succs
+let private updateSuccessors f ndId g =
+    match ndId with
+    | Entry -> g.entrySuccs <- f g.entrySuccs
     | Block n ->
         let blk =
             List.find (fun (k, _) -> k = n) g.BasicBlocks |> snd
         blk.succs <- f blk.succs
     | Exit -> failwith "Internal error: malformed CFG"
 
-let private update_predecessors f nd_id g =
-    match nd_id with
+let private updatePredecessors f ndId g =
+    match ndId with
     | Entry -> failwith "Internal error: malformed CFG"
     | Block n ->
         let blk =
             List.find (fun (k, _) -> k = n) g.BasicBlocks |> snd
         blk.preds <- f blk.preds
-    | Exit -> g.exit_preds <- f g.exit_preds
+    | Exit -> g.exitPreds <- f g.exitPreds
 
-let add_edge pred succ g =
-    let add_id nd_id id_list =
-        if List.contains nd_id id_list then id_list
-        else nd_id :: id_list
-    update_successors (add_id succ) pred g
-    update_predecessors (add_id pred) succ g
+let addEdge pred succ g =
+    let addId ndId idList =
+        if List.contains ndId idList then idList
+        else ndId :: idList
+    updateSuccessors (addId succ) pred g
+    updatePredecessors (addId pred) succ g
 
-let remove_edge pred succ g =
-    let remove_id nd_id id_list =
-        List.filter (fun i -> i <> nd_id) id_list
-    update_successors (remove_id succ) pred g
-    update_predecessors (remove_id pred) succ g
+let removeEdge pred succ g =
+    let removeId ndId idList =
+        List.filter (fun i -> i <> ndId) idList
+    updateSuccessors (removeId succ) pred g
+    updatePredecessors (removeId pred) succ g
 
 (* replace block with given block ID *)
-let update_BasicBlock block_idx new_block g =
-    let new_blocks =
+let updateBasicBlock blockIdx newBlock g =
+    let newBlocks =
         List.map
             (fun ((i, _) as blk) ->
-                if i = block_idx then (i, new_block) else blk)
+                if i = blockIdx then (i, newBlock) else blk)
             g.BasicBlocks
-    { g with BasicBlocks = new_blocks }
+    { g with BasicBlocks = newBlocks }
 
 (* constructing the CFG *)
-let private partition_into_BasicBlocks simplify instructions =
+let private partitionIntoBasicBlocks simplify instructions =
     let f (finished_blocks, current_block) i =
         match simplify i with
         | Label _ ->
@@ -129,43 +129,43 @@ let private partition_into_BasicBlocks simplify instructions =
             (finished :: finished_blocks, [])
         | Other -> (finished_blocks, i :: current_block)
     let finished, last = List.fold f ([], []) instructions
-    let all_blocks =
+    let allBlocks =
         if last = [] then finished else List.rev last :: finished
-    List.rev all_blocks
+    List.rev allBlocks
 
-let private add_all_edges simplify g =
+let private addAllEdges simplify g =
     (* build map from labels to the IDs of the blocks that they start with *)
-    let label_map =
+    let labelMap =
         List.fold
-            (fun lbl_map (_, blk) ->
+            (fun lblMap (_, blk) ->
                 match simplify (snd (List.head blk.instructions)) with
-                | Label lbl -> Map.add lbl blk.id lbl_map
-                | _ -> lbl_map)
+                | Label lbl -> Map.add lbl blk.id lblMap
+                | _ -> lblMap)
             Map.empty g.BasicBlocks
 
     (* add outgoing edges from a single basic block *)
-    let process_node (id_num, block) =
+    let processNode (id_num, block) =
         let next_block =
             if id_num = fst (ListUtil.last g.BasicBlocks) then Exit
             else Block(id_num + 1)
         let _, last_instr = ListUtil.last block.instructions
 
         match simplify last_instr with
-        | Return -> add_edge block.id Exit g
+        | Return -> addEdge block.id Exit g
         | UnconditionalJump target ->
-            let target_id = Map.find target label_map
-            add_edge block.id target_id g
+            let target_id = Map.find target labelMap
+            addEdge block.id target_id g
         | ConditionalJump target ->
-            let target_id = Map.find target label_map
-            add_edge block.id next_block g
-            add_edge block.id target_id g
-        | _ -> add_edge block.id next_block g
+            let target_id = Map.find target labelMap
+            addEdge block.id next_block g
+            addEdge block.id target_id g
+        | _ -> addEdge block.id next_block g
 
-    add_edge Entry (Block 0) g
-    List.iter process_node g.BasicBlocks
+    addEdge Entry (Block 0) g
+    List.iter processNode g.BasicBlocks
 
-let instructions_to_cfg simplify debug_label instructions =
-    let to_node idx instructions =
+let instructionsToCfg simplify debugLabel instructions =
+    let toNode idx instructions =
         let ann x = ((), x)
         (idx,
          { id = Block idx
@@ -175,96 +175,96 @@ let instructions_to_cfg simplify debug_label instructions =
            value = () })
     let cfg =
         { BasicBlocks =
-              List.mapi to_node
-                  (partition_into_BasicBlocks simplify instructions)
-          entry_succs = []
-          exit_preds = []
-          debug_label = debug_label }
+              List.mapi toNode
+                  (partitionIntoBasicBlocks simplify instructions)
+          entrySuccs = []
+          exitPreds = []
+          debugLabel = debugLabel }
 
-    add_all_edges simplify cfg
+    addAllEdges simplify cfg
     cfg
 
 (* converting back to instructions *)
-let cfg_to_instructions g =
-    let blk_to_instrs (_, { instructions = instructions }) =
+let cfgToInstructions g =
+    let blkToInstrs (_, { instructions = instructions }) =
         List.map snd instructions
-    List.collect blk_to_instrs g.BasicBlocks
+    List.collect blkToInstrs g.BasicBlocks
 
 (* working with annotations *)
 (* NOTE: Cannot use { x with ... } here because F# doesn't allow changing
    the type parameter in a record update expression (unlike OCaml).
    We construct new records explicitly to allow 'v to change. *)
-let initialize_annotation cfg dummy_val =
-    let initialize_instruction (_, i) = (dummy_val, i)
-    let initialize_block (idx, b) =
+let initializeAnnotation cfg dummyVal =
+    let initializeInstruction (_, i) = (dummyVal, i)
+    let initializeBlock (idx, b) =
         (idx,
          { id = b.id
-           instructions = List.map initialize_instruction b.instructions
+           instructions = List.map initializeInstruction b.instructions
            preds = b.preds
            succs = b.succs
-           value = dummy_val })
-    { BasicBlocks = List.map initialize_block cfg.BasicBlocks
-      entry_succs = cfg.entry_succs
-      exit_preds = cfg.exit_preds
-      debug_label = cfg.debug_label }
+           value = dummyVal })
+    { BasicBlocks = List.map initializeBlock cfg.BasicBlocks
+      entrySuccs = cfg.entrySuccs
+      exitPreds = cfg.exitPreds
+      debugLabel = cfg.debugLabel }
 
-let strip_annotations cfg = initialize_annotation cfg ()
+let stripAnnotations cfg = initializeAnnotation cfg ()
 
 (* debugging *)
-let print_graphviz (pp_instr: System.IO.TextWriter -> 'instr -> unit)
-                   (pp_val: System.IO.TextWriter -> 'v -> unit)
+let printGraphviz (ppInstr: System.IO.TextWriter -> 'instr -> unit)
+                   (ppVal: System.IO.TextWriter -> 'v -> unit)
                    (cfg: ControlFlowGraph<'v, 'instr>) =
     let filename =
-        UniqueIds.makeLabel cfg.debug_label + ".dot"
+        UniqueIds.makeLabel cfg.debugLabel + ".dot"
     let path =
         if System.IO.Path.IsPathRooted(filename) then filename
         else System.IO.Path.Combine(System.IO.Directory.GetCurrentDirectory(), filename)
     use writer = new System.IO.StreamWriter(path)
-    let pp_NodeId (out: System.IO.TextWriter) = function
+    let ppNodeId (out: System.IO.TextWriter) = function
         | Exit -> out.Write("exit")
         | Entry -> out.Write("entry")
         | Block n -> out.Write(sprintf "block%d" n)
-    let pp_annotated_instruction (out: System.IO.TextWriter) (v, i) =
+    let ppAnnotatedInstruction (out: System.IO.TextWriter) (v, i) =
         out.Write("<tr>")
         out.Write("<td align=\"left\">")
-        pp_instr out i
+        ppInstr out i
         out.Write("</td>")
         out.Write("<td align=\"left\">")
-        pp_val out v
+        ppVal out v
         out.Write("</td>")
         out.Write("</tr>")
         out.WriteLine()
-    let pp_block_instructions (out: System.IO.TextWriter) blk =
+    let ppBlockInstructions (out: System.IO.TextWriter) blk =
         out.Write("<table>")
         out.Write("<tr><td colspan=\"2\"><b>")
-        pp_NodeId out blk.id
+        ppNodeId out blk.id
         out.Write("</b></td></tr>")
         out.WriteLine()
-        List.iter (pp_annotated_instruction out) blk.instructions
+        List.iter (ppAnnotatedInstruction out) blk.instructions
         out.Write("<tr><td colspan=\"2\">")
-        pp_val out blk.value
+        ppVal out blk.value
         out.Write("</td></tr>")
         out.Write("</table>")
-    let pp_block (out: System.IO.TextWriter) (lbl, b) =
+    let ppBlock (out: System.IO.TextWriter) (lbl, b) =
         out.Write(sprintf "block%d[label=<" lbl)
-        pp_block_instructions out b
+        ppBlockInstructions out b
         out.Write(">]")
-    let pp_entry_edge (out: System.IO.TextWriter) lbl =
+    let ppEntryEdge (out: System.IO.TextWriter) lbl =
         out.Write("entry -> ")
-        pp_NodeId out lbl
-    let pp_edge i (out: System.IO.TextWriter) succ =
+        ppNodeId out lbl
+    let ppEdgei (out: System.IO.TextWriter) succ =
         out.Write(sprintf "block%d -> " i)
-        pp_NodeId out succ
-    let pp_edges (out: System.IO.TextWriter) ((lbl: int), (blk: BasicBlock<'a, _>)) =
-        List.iter (pp_edge lbl out) blk.succs
+        ppNodeId out succ
+    let ppEdges (out: System.IO.TextWriter) ((lbl: int), (blk: BasicBlock<'a, _>)) =
+        List.iter (ppEdgelbl out) blk.succs
     writer.WriteLine("digraph {")
     writer.WriteLine("  labeljust=l")
     writer.WriteLine("  node[shape=\"box\"]")
     writer.WriteLine("  entry[label=\"ENTRY\"]")
     writer.WriteLine("  exit[label=\"EXIT\"]")
-    List.iter (fun b -> pp_block writer b; writer.WriteLine()) cfg.BasicBlocks
-    List.iter (fun e -> pp_entry_edge writer e; writer.WriteLine()) cfg.entry_succs
-    List.iter (fun b -> pp_edges writer b; writer.WriteLine()) cfg.BasicBlocks
+    List.iter (fun b -> ppBlock writer b; writer.WriteLine()) cfg.BasicBlocks
+    List.iter (fun e -> ppEntryEdge writer e; writer.WriteLine()) cfg.entrySuccs
+    List.iter (fun b -> ppEdges writer b; writer.WriteLine()) cfg.BasicBlocks
     writer.WriteLine("}")
     writer.Flush()
     writer.Close()
@@ -285,17 +285,17 @@ module TackyCfg =
         | Tacky.Return _ -> Return
         | _ -> Other
 
-    let instructions_to_cfg debug_label instructions =
-        instructions_to_cfg simplify debug_label instructions
+    let instructionsToCfg debugLabel instructions =
+        instructionsToCfg simplify debugLabel instructions
 
-    let cfg_to_instructions g = cfg_to_instructions g
-    let get_succs nd_id cfg = get_succs nd_id cfg
-    let get_block_value blocknum cfg = get_block_value blocknum cfg
-    let add_edge pred succ g = add_edge pred succ g
-    let remove_edge pred succ g = remove_edge pred succ g
-    let update_BasicBlock idx blk g = update_BasicBlock idx blk g
-    let initialize_annotation cfg v = initialize_annotation cfg v
-    let strip_annotations cfg = strip_annotations cfg
+    let cfgToInstructions g = cfgToInstructions g
+    let getSuccs ndId cfg = getSuccs ndId cfg
+    let getBlockValue blocknum cfg = getBlockValue blocknum cfg
+    let addEdge pred succ g = addEdge pred succ g
+    let removeEdge pred succ g = removeEdge pred succ g
+    let updateBasicBlock idx blk g = updateBasicBlock idx blk g
+    let initializeAnnotation cfg v = initializeAnnotation cfg v
+    let stripAnnotations cfg = stripAnnotations cfg
 
 module AsmCfg =
     let simplify = function
@@ -305,14 +305,14 @@ module AsmCfg =
         | Assembly.Ret -> Return
         | _ -> Other
 
-    let instructions_to_cfg debug_label instructions =
-        instructions_to_cfg simplify debug_label instructions
+    let instructionsToCfg debugLabel instructions =
+        instructionsToCfg simplify debugLabel instructions
 
-    let cfg_to_instructions g = cfg_to_instructions g
-    let get_succs nd_id cfg = get_succs nd_id cfg
-    let get_block_value blocknum cfg = get_block_value blocknum cfg
-    let add_edge pred succ g = add_edge pred succ g
-    let remove_edge pred succ g = remove_edge pred succ g
-    let update_BasicBlock idx blk g = update_BasicBlock idx blk g
-    let initialize_annotation cfg v = initialize_annotation cfg v
-    let strip_annotations cfg = strip_annotations cfg
+    let cfgToInstructions g = cfgToInstructions g
+    let getSuccs ndId cfg = getSuccs ndId cfg
+    let getBlockValue blocknum cfg = getBlockValue blocknum cfg
+    let addEdge pred succ g = addEdge pred succ g
+    let removeEdge pred succ g = removeEdge pred succ g
+    let updateBasicBlock idx blk g = updateBasicBlock idx blk g
+    let initializeAnnotation cfg v = initializeAnnotation cfg v
+    let stripAnnotations cfg = stripAnnotations cfg

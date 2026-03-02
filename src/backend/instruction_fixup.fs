@@ -4,40 +4,40 @@ open Assembly
 
 let int32_max = int64 System.Int32.MaxValue
 let int32_min = int64 System.Int32.MinValue
-let is_large imm = imm > int32_max || imm < int32_min
+let isLarge imm = imm > int32_max || imm < int32_min
 
-let is_larger_than_uint imm =
+let isLargerThanUint imm =
   (* use unsigned upper-bound for positives *)
   let max_i = 4294967295L (* 2^32 - 1*)
   (* use signed 32-bit lower bound for negatives *)
   imm > max_i || imm < int32_min
 
-let is_larger_than_byte imm = imm >= 256L || imm < -128L
-let is_constant = function Imm _ -> true | _ -> false
+let isLargerThanByte imm = imm >= 256L || imm < -128L
+let isConstant = function Imm _ -> true | _ -> false
 
-let is_memory = function
+let isMemory = function
   | Memory _ | Data _ -> true
   | Indexed _ -> true
   | _ -> false
 
-let is_xmm = function
+let isXmm = function
   | XMM0 | XMM1 | XMM2 | XMM3 | XMM4 | XMM5 | XMM6 | XMM7 | XMM8 | XMM9 | XMM10
   | XMM11 | XMM12 | XMM13 | XMM14 | XMM15 ->
       true
   | _ -> false
 
-let fixup_instruction callee_saved_regs = function
+let fixupInstruction callee_saved_regs = function
   (* Mov can't move a value from one memory address to another *)
   | Mov (t, ((Memory _ | Data _) as src), ((Memory _ | Data _) as dst)) ->
       let scratch = if t = Double then Reg XMM14 else Reg R10
       [ Mov (t, src, scratch); Mov (t, scratch, dst) ]
   (* Mov can't move a large constant to a memory address *)
-  | Mov (Quadword, (Imm i as src), ((Memory _ | Data _) as dst)) when is_large i
+  | Mov (Quadword, (Imm i as src), ((Memory _ | Data _) as dst)) when isLarge i
     ->
       [ Mov (Quadword, src, Reg R10); Mov (Quadword, Reg R10, dst) ]
   (* Moving a quadword-size constant with a longword operand size produces
      assembler warning *)
-  | Mov (Longword, Imm i, dst) when is_larger_than_uint i ->
+  | Mov (Longword, Imm i, dst) when isLargerThanUint i ->
       (* reduce modulo 2^32 by zeroing out upper 32 bits
        * NOTE: can't use Int64.modulo b/c it just calculates remainder *)
       let bitmask = 0xffffffffL
@@ -45,7 +45,7 @@ let fixup_instruction callee_saved_regs = function
       [ Mov (Longword, Imm reduced, dst) ]
   (* Moving a longword-size constant with a byte operand size produces assembler
      warning *)
-  | Mov (Byte, Imm i, dst) when is_larger_than_byte i ->
+  | Mov (Byte, Imm i, dst) when isLargerThanByte i ->
       let reduced = int64 (sbyte i)
       [ Mov (Byte, Imm reduced, dst) ]
   (* Movsx can't handle immediate source or memory dst *)
@@ -73,7 +73,7 @@ let fixup_instruction callee_saved_regs = function
       ]
   | MovZeroExtend { src_type = Byte; src = Imm i; dst_type = dst_type; dst = dst } ->
       (* MovZeroExtend src can't be an immediate *)
-      if is_memory dst then
+      if isMemory dst then
         [
           Mov (Byte, Imm i, Reg R10);
           MovZeroExtend
@@ -85,13 +85,13 @@ let fixup_instruction callee_saved_regs = function
           Mov (Byte, Imm i, Reg R10);
           MovZeroExtend { src_type = Byte; src = Reg R10; dst_type = dst_type; dst = dst };
         ]
-  | MovZeroExtend { src_type = Byte; dst_type = dst_type; src = src; dst = dst } when is_memory dst ->
+  | MovZeroExtend { src_type = Byte; dst_type = dst_type; src = src; dst = dst } when isMemory dst ->
       (* MovZeroExtend destination must be a register *)
       [
         MovZeroExtend { src_type = Byte; dst_type = dst_type; src = src; dst = Reg R11 };
         Mov (dst_type, Reg R11, dst);
       ]
-  | MovZeroExtend { src_type = Longword; dst_type = dst_type; src = src; dst = dst } when is_memory dst
+  | MovZeroExtend { src_type = Longword; dst_type = dst_type; src = src; dst = dst } when isMemory dst
     ->
       (* to zero-extend longword to quadword, first copy into register, then
          move to destination *)
@@ -104,7 +104,7 @@ let fixup_instruction callee_saved_regs = function
   | Idiv (t, Imm i) -> [ Mov (t, Imm i, Reg R10); Idiv (t, Reg R10) ]
   | Div (t, Imm i) -> [ Mov (t, Imm i, Reg R10); Div (t, Reg R10) ]
   (* dst of lea must be a register *)
-  | Lea (src, dst) when is_memory dst ->
+  | Lea (src, dst) when isMemory dst ->
       [ Lea (src, Reg R11); Mov (Quadword, Reg R11, dst) ]
   (* Binary operations on double require register as destination *)
   | Binary { t = Double; dst = Reg _ } as i -> [ i ]
@@ -122,7 +122,7 @@ let fixup_instruction callee_saved_regs = function
         src = Imm i as src;
         dst = dst;
       }
-    when is_large i ->
+    when isLarge i ->
       [
         Mov (Quadword, src, Reg R10);
         Binary { op = op; t = Quadword; src = Reg R10; dst = dst };
@@ -144,7 +144,7 @@ let fixup_instruction callee_saved_regs = function
         src = Imm i as src;
         dst = (Memory _ | Data _) as dst;
       }
-    when is_large i ->
+    when isLarge i ->
       (* rewrite both operands *)
       [
         Mov (Quadword, src, Reg R10);
@@ -152,7 +152,7 @@ let fixup_instruction callee_saved_regs = function
         Binary { op = Mult; t = Quadword; src = Reg R10; dst = Reg R11 };
         Mov (Quadword, Reg R11, dst);
       ]
-  | Binary { op = Mult; t = Quadword; src = Imm i as src; dst = dst } when is_large i
+  | Binary { op = Mult; t = Quadword; src = Imm i as src; dst = dst } when isLarge i
     ->
       (* just rewrite src *)
       [
@@ -174,36 +174,36 @@ let fixup_instruction callee_saved_regs = function
       [ Mov (t, src, Reg R10); Cmp (t, Reg R10, dst) ]
   (* first operand of Cmp can't be a large constant, second can't be a constant
      at all *)
-  | Cmp (Quadword, (Imm i as src), (Imm _ as dst)) when is_large i ->
+  | Cmp (Quadword, (Imm i as src), (Imm _ as dst)) when isLarge i ->
       [
         Mov (Quadword, src, Reg R10);
         Mov (Quadword, dst, Reg R11);
         Cmp (Quadword, Reg R10, Reg R11);
       ]
-  | Cmp (Quadword, (Imm i as src), dst) when is_large i ->
+  | Cmp (Quadword, (Imm i as src), dst) when isLarge i ->
       [ Mov (Quadword, src, Reg R10); Cmp (Quadword, Reg R10, dst) ]
   | Cmp (t, src, Imm i) -> [ Mov (t, Imm i, Reg R11); Cmp (t, src, Reg R11) ]
-  | Push (Reg r) when is_xmm r ->
+  | Push (Reg r) when isXmm r ->
       [
         Binary
           { op = Sub; t = Quadword; src = Imm 8L; dst = Reg SP };
         Mov (Double, Reg r, Memory (SP, 0));
       ]
-  | Push (Imm i as src) when is_large i ->
+  | Push (Imm i as src) when isLarge i ->
       [ Mov (Quadword, src, Reg R10); Push (Reg R10) ]
       (* destination of cvttsd2si must be a register *)
   | Cvttsd2si (t, src, ((Memory _ | Data _) as dst)) ->
       [ Cvttsd2si (t, src, Reg R11); Mov (t, Reg R11, dst) ]
   | Cvtsi2sd (t, src, dst) as i ->
-      if is_constant src && is_memory dst then
+      if isConstant src && isMemory dst then
         [
           Mov (t, src, Reg R10);
           Cvtsi2sd (t, Reg R10, Reg XMM15);
           Mov (Double, Reg XMM15, dst);
         ]
-      else if is_constant src then
+      else if isConstant src then
         [ Mov (t, src, Reg R10); Cvtsi2sd (t, Reg R10, dst) ]
-      else if is_memory dst then
+      else if isMemory dst then
         [ Cvtsi2sd (t, src, Reg XMM15); Mov (Double, Reg XMM15, dst) ]
       else [ i ]
   | Ret ->
@@ -212,7 +212,7 @@ let fixup_instruction callee_saved_regs = function
       restore_regs @ [ Ret ]
   | other -> [ other ]
 
-let emit_stack_adjustment bytes_for_locals callee_saved_count =
+let emitStackAdjustment bytes_for_locals callee_saved_count =
   let callee_saved_bytes = 8 * callee_saved_count
   let total_stack_bytes = callee_saved_bytes + bytes_for_locals
   let adjusted_stack_bytes =
@@ -221,16 +221,16 @@ let emit_stack_adjustment bytes_for_locals callee_saved_count =
     int64 (adjusted_stack_bytes - callee_saved_bytes)
   Binary { op = Sub; t = Quadword; src = Imm stack_adjustment; dst = Reg SP }
 
-let fixup_tl = function
+let fixupTl = function
   | Function { name = name; ``global`` = ``global``; instructions = instructions } ->
       (* TODO bytes_required should be positive (fix this in replace_pseudos) *)
-      let stack_bytes = -AssemblySymbols.get_bytes_required name
+      let stack_bytes = -AssemblySymbols.getBytesRequired name
       let callee_saved_regs =
-        AssemblySymbols.get_callee_saved_regs_used name |> Set.toList
+        AssemblySymbols.getCalleeSavedRegsUsed name |> Set.toList
 
       let save_reg r = Push (Reg r)
       let adjust_rsp =
-        emit_stack_adjustment stack_bytes (List.length callee_saved_regs)
+        emitStackAdjustment stack_bytes (List.length callee_saved_regs)
       let setup_instructions =
         adjust_rsp :: List.map save_reg callee_saved_regs
       Function
@@ -239,10 +239,10 @@ let fixup_tl = function
           ``global`` = ``global``;
           instructions =
             setup_instructions
-            @ List.collect (fixup_instruction callee_saved_regs) instructions;
+            @ List.collect (fixupInstruction callee_saved_regs) instructions;
         }
   | static_var -> static_var
 
-let fixup_program (Program tls) =
-  let fixed_functions = List.map fixup_tl tls
+let fixupProgram (Program tls) =
+  let fixed_functions = List.map fixupTl tls
   Program fixed_functions

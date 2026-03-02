@@ -13,11 +13,11 @@ let cat (a: byte[]) (b: byte[]) = Array.append a b
 let sub (b: byte[]) (offset: int) (len: int) =
     b.[offset .. offset + len - 1]
 
-let get_int64_le (b: byte[]) (offset: int) =
+let getInt64Le (b: byte[]) (offset: int) =
     System.BitConverter.ToInt64(b, offset)
 
-let get_int32_le (b: byte[]) (offset: int) =
+let getInt32Le (b: byte[]) (offset: int) =
     System.BitConverter.ToInt32(b, offset)
 
-let get_int8 (b: byte[]) (offset: int) =
+let getInt8 (b: byte[]) (offset: int) =
     sbyte b.[offset]

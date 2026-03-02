@@ -1,18 +1,18 @@
 module Address_taken
 
 let analyze instrs =
-    let addr_taken =
+    let addrTaken =
         function
         | Tacky.GetAddress { src = Tacky.Var v } -> Some v
         | _ -> None
 
-    Set.ofList (List.choose addr_taken instrs)
+    Set.ofList (List.choose addrTaken instrs)
 
-let analyze_program (Tacky.Program tls) =
-    let analyze_tl =
+let analyzeProgram (Tacky.Program tls) =
+    let analyzeTl =
         function
         | Tacky.Function f -> analyze f.body
         | _ -> Set.empty
 
-    let aliased_vars_per_fun = List.map analyze_tl tls
-    List.fold Set.union Set.empty aliased_vars_per_fun
+    let aliasedVarsPerFun = List.map analyzeTl tls
+    List.fold Set.union Set.empty aliasedVarsPerFun

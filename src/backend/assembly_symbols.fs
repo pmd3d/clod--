@@ -26,10 +26,10 @@ type AsmSymbolEntry =
     | Fun of AsmFunEntry
     | Obj of AsmObjEntry
 
-let symbol_table = Dictionary<string, AsmSymbolEntry>()
+let symbolTable = Dictionary<string, AsmSymbolEntry>()
 
-let add_fun fun_name defined return_on_stack param_regs return_regs =
-    symbol_table.[fun_name] <- Fun {
+let addFun fun_name defined return_on_stack param_regs return_regs =
+    symbolTable.[fun_name] <- Fun {
         defined = defined
         bytes_required = 0
         callee_saved_regs_used = Reg_set.empty
@@ -38,39 +38,39 @@ let add_fun fun_name defined return_on_stack param_regs return_regs =
         return_regs = return_regs
     }
 
-let add_var var_name t is_static =
-    symbol_table.[var_name] <- Obj { t = t; is_static = is_static; constant = false }
+let addVar var_name t is_static =
+    symbolTable.[var_name] <- Obj { t = t; is_static = is_static; constant = false }
 
-let add_constant const_name t =
-    symbol_table.[const_name] <- Obj { t = t; is_static = true; constant = true }
+let addConstant const_name t =
+    symbolTable.[const_name] <- Obj { t = t; is_static = true; constant = true }
 
-let set_bytes_required fun_name bytes_required =
+let setBytesRequired fun_name bytes_required =
     let entry' =
-        match symbol_table.[fun_name] with
+        match symbolTable.[fun_name] with
         | Fun f -> Fun { f with bytes_required = bytes_required }
         | Obj _ -> failwith "Internal error: not a function"
-    symbol_table.[fun_name] <- entry'
+    symbolTable.[fun_name] <- entry'
 
-let get_bytes_required fun_name =
-    match symbol_table.[fun_name] with
+let getBytesRequired fun_name =
+    match symbolTable.[fun_name] with
     | Fun f -> f.bytes_required
     | Obj _ -> failwith "Internal error: not a function"
 
-let add_callee_saved_regs_used fun_name regs =
+let addCalleeSavedRegsUsed fun_name regs =
     let entry' =
-        match symbol_table.[fun_name] with
+        match symbolTable.[fun_name] with
         | Fun f ->
             Fun { f with callee_saved_regs_used = Reg_set.union f.callee_saved_regs_used regs }
         | Obj _ -> failwith "Internal error: not a function"
-    symbol_table.[fun_name] <- entry'
+    symbolTable.[fun_name] <- entry'
 
-let get_callee_saved_regs_used fun_name =
-    match symbol_table.[fun_name] with
+let getCalleeSavedRegsUsed fun_name =
+    match symbolTable.[fun_name] with
     | Fun f -> f.callee_saved_regs_used
     | Obj _ -> failwith "Internal error: not a function"
 
-let get_size var_name =
-    match symbol_table.[var_name] with
+let getSize var_name =
+    match symbolTable.[var_name] with
     | Obj { t = Assembly.Byte } -> 1
     | Obj { t = Assembly.Longword } -> 4
     | Obj { t = Assembly.Quadword }
@@ -78,13 +78,13 @@ let get_size var_name =
     | Obj { t = Assembly.ByteArray { size = size } } -> size
     | Fun _ -> failwith "Internal error: this is a function, not an object"
 
-let get_type var_name =
-    match symbol_table.[var_name] with
+let getType var_name =
+    match symbolTable.[var_name] with
     | Obj { t = t } -> t
     | Fun _ -> failwith "Internal error: this is a function, not an object"
 
-let get_alignment var_name =
-    match symbol_table.[var_name] with
+let getAlignment var_name =
+    match symbolTable.[var_name] with
     | Obj { t = Assembly.Byte } -> 1
     | Obj { t = Assembly.Longword } -> 4
     | Obj { t = Assembly.Quadword }
@@ -92,33 +92,33 @@ let get_alignment var_name =
     | Obj { t = Assembly.ByteArray { alignment = alignment } } -> alignment
     | Fun _ -> failwith "Internal error: this is a function, not an object"
 
-let is_defined fun_name =
-    match symbol_table.[fun_name] with
+let isDefined fun_name =
+    match symbolTable.[fun_name] with
     | Fun { defined = defined } -> defined
     | _ -> failwith "Internal error: not a function"
 
-let is_static var_name =
-    match symbol_table.[var_name] with
+let isStatic var_name =
+    match symbolTable.[var_name] with
     | Obj o -> o.is_static
     | Fun _ -> failwith "Internal error: functions don't have storage duration"
 
-let is_constant name =
-    match symbol_table.[name] with
+let isConstant name =
+    match symbolTable.[name] with
     | Obj { constant = true } -> true
     | Obj _ -> false
     | Fun _ -> failwith "Internal error: is_constant doesn't make sense for functions"
 
-let returns_on_stack fun_name =
-    match symbol_table.[fun_name] with
+let returnsOnStack fun_name =
+    match symbolTable.[fun_name] with
     | Fun f -> f.return_on_stack
     | Obj _ -> failwith "Internal error: this is an object, not a function"
 
-let param_regs_used fun_name =
-    match symbol_table.[fun_name] with
+let paramRegsUsed fun_name =
+    match symbolTable.[fun_name] with
     | Fun f -> f.param_regs
     | Obj _ -> failwith "Internal error: not a function"
 
-let return_regs_used fun_name =
-    match symbol_table.[fun_name] with
+let returnRegsUsed fun_name =
+    match symbolTable.[fun_name] with
     | Fun f -> f.return_regs
     | Obj _ -> failwith "Internal error: not a function"
