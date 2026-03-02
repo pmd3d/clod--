@@ -10,7 +10,7 @@ let print_const c =
     | _ -> sprintf "%A" c
 
 let convert_and_print target_type c =
-  let converted = ConstConvert.const_convert target_type c in
+  let converted = ConstConvert.constConvert target_type c in
   print_const converted
 
 [<Fact>]
