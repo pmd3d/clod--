@@ -22,4 +22,7 @@ dotnet run
 
 ```bash
 dotnet publish -c Release --self-contained -p:PublishSingleFile=true
+
+for linux:
+dotnet publish -c Release --self-contained -p:PublishSingleFile=true -r linux-x64 -p:UseAppHost=true
 ```
