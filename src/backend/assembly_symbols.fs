@@ -11,13 +11,13 @@ type FunEntry = {
     defined: bool
     bytes_required: int
     return_on_stack: bool
-    param_regs: Assembly.reg list
-    return_regs: Assembly.reg list
+    param_regs: Assembly.AsmReg list
+    return_regs: Assembly.AsmReg list
     callee_saved_regs_used: Reg_set.t
 }
 
 type ObjEntry = {
-    t: Assembly.asm_type
+    t: Assembly.AsmType
     is_static: bool
     constant: bool
 }

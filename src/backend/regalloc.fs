@@ -7,11 +7,11 @@ module AsmCfg = Cfg.AsmCfg
 
 // Operand module mostly for type definition compat
 module Operand =
-    type t = operand
-    let compare (a: operand) (b: operand) = Operators.compare a b
+    type t = AsmOperand
+    let compare (a: AsmOperand) (b: AsmOperand) = Operators.compare a b
 
-let show_reg (r: reg) = sprintf "%A" r
-let pp_operand (out: System.IO.TextWriter) (op: operand) = out.Write(sprintf "%A" op)
+let show_reg (r: AsmReg) = sprintf "%A" r
+let pp_operand (out: System.IO.TextWriter) (op: AsmOperand) = out.Write(sprintf "%A" op)
 
 // F# Sets and Maps are generic, but we define aliases to match OCaml naming
 type OperandSet = Set<Operand.t>
@@ -73,8 +73,8 @@ let cleanup_movs instructions =
 // Configuration type to replace the OCaml functor argument module
 type RegTypeOps = {
     suffix : string
-    all_hardregs : Assembly.reg list
-    caller_saved_regs : Assembly.reg list
+    all_hardregs : Assembly.AsmReg list
+    caller_saved_regs : Assembly.AsmReg list
     pseudo_is_current_type : string -> bool
 }
 
@@ -90,7 +90,7 @@ let fold_left_map f acc xs =
 
 // Node type for the interference graph
 type AllocNode = {
-    id : Assembly.operand
+    id : Assembly.AsmOperand
     mutable neighbors : OperandSet
     spill_cost : float
     color : int option
@@ -175,10 +175,10 @@ type Allocator(R : RegTypeOps) =
     // Since they depend on generic concepts but not strictly on R values for definition, 
     // we define the structure here.
     
-    // type node_id = Assembly.operand // Alias
+    // type node_id = Assembly.AsmOperand // Alias
 
     // type node = {
-    //    id : Assembly.operand;
+    //    id : Assembly.AsmOperand;
     //    mutable neighbors : OperandSet;
     //    spill_cost : float;
     //    color : int option;
@@ -211,7 +211,7 @@ type Allocator(R : RegTypeOps) =
                 go acc' (y :: result) xs
         go acc [] lst
 
-    let meet fn_name (cfg: Cfg.t<Set<operand>, instruction>) (block: Cfg.basic_block<Set<operand>, instruction>) =
+    let meet fn_name (cfg: Cfg.t<Set<AsmOperand>, instruction>) (block: Cfg.basic_block<Set<AsmOperand>, instruction>) =
         let live_at_exit =
             let all_return_regs =
                 AssemblySymbols.return_regs_used fn_name
@@ -230,8 +230,8 @@ type Allocator(R : RegTypeOps) =
         in
         List.fold update_live Set.empty block.succs
 
-    let transfer (block: Cfg.basic_block<Set<operand>, instruction>) (end_live_regs: Set<operand>) =
-        let process_instr current_live_regs ((_: Set<operand>), (i: instruction)) =
+    let transfer (block: Cfg.basic_block<Set<AsmOperand>, instruction>) (end_live_regs: Set<AsmOperand>) =
+        let process_instr current_live_regs ((_: Set<AsmOperand>), (i: AsmInstruction)) =
             let annotated_instr = (current_live_regs, i) in
             let new_live_regs =
                 let regs_used, regs_written = regs_used_and_written i in
@@ -252,19 +252,19 @@ type Allocator(R : RegTypeOps) =
     let analyze_liveness fn_name cfg =
         Backward_dataflow.analyze
             pp_operand
-            (Set.empty : Set<operand>)
+            (Set.empty : Set<AsmOperand>)
             (=)
             Set.toList
             (meet fn_name)
             transfer
             Cfg.initialize_annotation
             Cfg.update_basic_block
-            (fun (blk: Cfg.basic_block<Set<operand>, instruction>) -> blk.value)
-            (fun (blk: Cfg.basic_block<Set<operand>, instruction>) -> blk.preds)
-            (fun (cfg: Cfg.t<Set<operand>, instruction>) -> cfg.basic_blocks)
-            (fun (cfg: Cfg.t<Set<operand>, instruction>) -> cfg.debug_label)
-            (fun lbl (cfg: Cfg.t<Set<operand>, instruction>) -> { cfg with debug_label = lbl })
-            (Cfg.print_graphviz (fun (out: System.IO.TextWriter) (i: instruction) -> out.Write(sprintf "%A" i)))
+            (fun (blk: Cfg.basic_block<Set<AsmOperand>, instruction>) -> blk.value)
+            (fun (blk: Cfg.basic_block<Set<AsmOperand>, instruction>) -> blk.preds)
+            (fun (cfg: Cfg.t<Set<AsmOperand>, instruction>) -> cfg.basic_blocks)
+            (fun (cfg: Cfg.t<Set<AsmOperand>, instruction>) -> cfg.debug_label)
+            (fun lbl (cfg: Cfg.t<Set<AsmOperand>, instruction>) -> { cfg with debug_label = lbl })
+            (Cfg.print_graphviz (fun (out: System.IO.TextWriter) (i: AsmInstruction) -> out.Write(sprintf "%A" i)))
             cfg
 
     let k = Set.count all_hardregs
@@ -341,7 +341,7 @@ type Allocator(R : RegTypeOps) =
             let nd1 = Map.find nd_id1 g
             Set.contains nd_id2 nd1.neighbors
 
-        let add_edges (liveness_cfg: Cfg.t<Set<operand>, instruction>) interference_graph =
+        let add_edges (liveness_cfg: Cfg.t<Set<AsmOperand>, instruction>) interference_graph =
             let handle_instr (live_after_instr, i) =
                 let _, updated_regs = regs_used_and_written i in
 
@@ -364,7 +364,7 @@ type Allocator(R : RegTypeOps) =
 
             let all_instructions =
                 List.collect
-                    (fun (_, (blk: Cfg.basic_block<Set<operand>, instruction>)) -> blk.instructions)
+                    (fun (_, (blk: Cfg.basic_block<Set<AsmOperand>, instruction>)) -> blk.instructions)
                     liveness_cfg.basic_blocks
             in
             List.iter handle_instr all_instructions

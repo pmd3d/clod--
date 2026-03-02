@@ -1,6 +1,6 @@
-﻿module Assembly
+module Assembly
 
-type reg =
+type AsmReg =
     | AX
     | BX
     | CX
@@ -34,20 +34,20 @@ type reg =
     | XMM14
     | XMM15
 
-type indexed_operand = { ``base``: reg; index: reg; scale: int }
+type AsmIndexedOperand = { ``base``: AsmReg; index: AsmReg; scale: int }
 
-type operand =
+type AsmOperand =
     | Imm of int64
-    | Reg of reg
+    | Reg of AsmReg
     | Pseudo of string
-    | Memory of reg * int
+    | Memory of AsmReg * int
     | Data of string * int
     | PseudoMem of string * int
-    | Indexed of indexed_operand
+    | Indexed of AsmIndexedOperand
 
-type unary_operator = Neg | Not | Shr
+type AsmUnaryOperator = Neg | Not | Shr
 
-type binary_operator =
+type AsmBinaryOperator =
     | Add
     | Sub
     | Mult
@@ -58,82 +58,82 @@ type binary_operator =
     | Shl
     | ShrBinop
 
-type cond_code = E | NE | G | GE | L | LE | A | AE | B | BE
+type AsmCondCode = E | NE | G | GE | L | LE | A | AE | B | BE
 
-type byte_array_info = { size: int; alignment: int }
+type AsmByteArrayInfo = { size: int; alignment: int }
 
-type asm_type =
+type AsmType =
     | Byte
     | Longword
     | Quadword
     | Double
-    | ByteArray of byte_array_info
+    | ByteArray of AsmByteArrayInfo
 
-type movsx_info = {
-    src_type: asm_type
-    dst_type: asm_type
-    src: operand
-    dst: operand
+type AsmMovsxInfo = {
+    src_type: AsmType
+    dst_type: AsmType
+    src: AsmOperand
+    dst: AsmOperand
 }
 
-type mov_zero_extend_info = {
-    src_type: asm_type
-    dst_type: asm_type
-    src: operand
-    dst: operand
+type AsmMovZeroExtendInfo = {
+    src_type: AsmType
+    dst_type: AsmType
+    src: AsmOperand
+    dst: AsmOperand
 }
 
-type binary_info = {
-    op: binary_operator
-    t: asm_type
-    src: operand
-    dst: operand
+type AsmBinaryInfo = {
+    op: AsmBinaryOperator
+    t: AsmType
+    src: AsmOperand
+    dst: AsmOperand
 }
 
-type instruction =
-    | Mov of asm_type * operand * operand
-    | Movsx of movsx_info
-    | MovZeroExtend of mov_zero_extend_info
-    | Lea of operand * operand
-    | Cvttsd2si of asm_type * operand * operand
-    | Cvtsi2sd of asm_type * operand * operand
-    | Unary of unary_operator * asm_type * operand
-    | Binary of binary_info
-    | Cmp of asm_type * operand * operand
-    | Idiv of asm_type * operand
-    | Div of asm_type * operand
-    | Cdq of asm_type
+type AsmInstruction =
+    | Mov of AsmType * AsmOperand * AsmOperand
+    | Movsx of AsmMovsxInfo
+    | MovZeroExtend of AsmMovZeroExtendInfo
+    | Lea of AsmOperand * AsmOperand
+    | Cvttsd2si of AsmType * AsmOperand * AsmOperand
+    | Cvtsi2sd of AsmType * AsmOperand * AsmOperand
+    | Unary of AsmUnaryOperator * AsmType * AsmOperand
+    | Binary of AsmBinaryInfo
+    | Cmp of AsmType * AsmOperand * AsmOperand
+    | Idiv of AsmType * AsmOperand
+    | Div of AsmType * AsmOperand
+    | Cdq of AsmType
     | Jmp of string
-    | JmpCC of cond_code * string
-    | SetCC of cond_code * operand
+    | JmpCC of AsmCondCode * string
+    | SetCC of AsmCondCode * AsmOperand
     | Label of string
-    | Push of operand
-    | Pop of reg
+    | Push of AsmOperand
+    | Pop of AsmReg
     | Call of string
     | Ret
 
-type function_def = {
+type AsmFunctionDef = {
     name: string
     ``global``: bool
-    instructions: instruction list
+    instructions: AsmInstruction list
 }
 
-type static_variable_def = {
+type AsmStaticVariableDef = {
     name: string
     alignment: int
     ``global``: bool
     init: Initializers.static_init list
 }
 
-type static_constant_def = {
+type AsmStaticConstantDef = {
     name: string
     alignment: int
     init: Initializers.static_init
 }
 
-type top_level =
-    | Function of function_def
-    | StaticVariable of static_variable_def
-    | StaticConstant of static_constant_def
+type AsmTopLevel =
+    | Function of AsmFunctionDef
+    | StaticVariable of AsmStaticVariableDef
+    | StaticConstant of AsmStaticConstantDef
 
-type t = Program of top_level list
+type AsmProgram = Program of AsmTopLevel list

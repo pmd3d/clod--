@@ -1,6 +1,6 @@
 ﻿module Reg_set
 
-type t = Set<Assembly.reg>
+type t = Set<Assembly.AsmReg>
 
 let empty: t = Set.empty
 let singleton x: t = Set.singleton x
@@ -19,6 +19,6 @@ let filter f (s: t): t = Set.filter f s
 let exists f (s: t) = Set.exists f s
 let for_all f (s: t) = Set.forall f s
 let elements (s: t) = Set.toList s
-let of_list (l: Assembly.reg list): t = Set.ofList l
+let of_list (l: Assembly.AsmReg list): t = Set.ofList l
 let subset (s1: t) (s2: t) = Set.isSubset s1 s2
 let choose (s: t) = Set.minElement s
