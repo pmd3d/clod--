@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
@@ -7,47 +7,47 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Include="types.fs" />
-    <Compile Include="const.fs" />
-    <Compile Include="ast.fs" />
-    <Compile Include="util\stringutil.fs" />
-    <Compile Include="util\disjoint_sets.fs" />
-    <Compile Include="util\Make.fs" />
-    <Compile Include="util\int8.fs" />
-    <Compile Include="util\rounding.fs" />
-    <Compile Include="util\unique_ids.fs" />
-    <Compile Include="util\listutil.fs" />
-    <Compile Include="settings.fs" />
-    <Compile Include="type_table.fs" />
-    <Compile Include="util\type_utils.fs" />
-    <Compile Include="initializers.fs" />
-    <Compile Include="tokens.fs" />
-    <Compile Include="assembly.fs" />
-    <Compile Include="reg_set.fs" />
-    <Compile Include="symbols.fs" />
-    <Compile Include="tacky.fs" />
-    <Compile Include="cfg.fs" />
-    <Compile Include="backward_dataflow.fs" />
-    <Compile Include="bytes.fs" />
-    <Compile Include="const_convert.fs" />
-    <Compile Include="backend\assembly_symbols.fs" />
-    <Compile Include="emit.fs" />
-    <Compile Include="stream.fs" />
-    <Compile Include="tokstream.fs" />
-    <Compile Include="lex.fs" />
-    <Compile Include="parse.fs" />
-    <Compile Include="tacky_print.fs" />
-    <Compile Include="semantic_analysis\resolve.fs" />
-    <Compile Include="semantic_analysis\label_loops.fs" />
-    <Compile Include="semantic_analysis\typecheck.fs" />
-    <Compile Include="tacky_gen.fs" />
-    <Compile Include="optimizations\optimize.fs" />
-    <Compile Include="optimizations\address_taken.fs" />
-    <Compile Include="backend\codegen.fs" />
-    <Compile Include="backend\regalloc.fs" />
-    <Compile Include="backend\replace_pseudos.fs" />
-    <Compile Include="backend\instruction_fixup.fs" />
-    <Compile Include="compile.fs" />
+    <Compile Include="Types.fs" />
+    <Compile Include="Const.fs" />
+    <Compile Include="Ast.fs" />
+    <Compile Include="util\StringUtil.fs" />
+    <Compile Include="util\DisjointSets.fs" />
+
+    <Compile Include="util\Int8.fs" />
+    <Compile Include="util\Rounding.fs" />
+    <Compile Include="util\UniqueIds.fs" />
+    <Compile Include="util\ListUtil.fs" />
+    <Compile Include="Settings.fs" />
+    <Compile Include="TypeTable.fs" />
+    <Compile Include="util\TypeUtils.fs" />
+    <Compile Include="Initializers.fs" />
+    <Compile Include="Tokens.fs" />
+    <Compile Include="Assembly.fs" />
+    <Compile Include="RegSet.fs" />
+    <Compile Include="Symbols.fs" />
+    <Compile Include="Tacky.fs" />
+    <Compile Include="Cfg.fs" />
+    <Compile Include="BackwardDataflow.fs" />
+    <Compile Include="Bytes.fs" />
+    <Compile Include="ConstConvert.fs" />
+    <Compile Include="backend\AssemblySymbols.fs" />
+    <Compile Include="Emit.fs" />
+    <Compile Include="Stream.fs" />
+    <Compile Include="TokStream.fs" />
+    <Compile Include="Lex.fs" />
+    <Compile Include="Parse.fs" />
+    <Compile Include="TackyPrint.fs" />
+    <Compile Include="semantic_analysis\Resolve.fs" />
+    <Compile Include="semantic_analysis\LabelLoops.fs" />
+    <Compile Include="semantic_analysis\Typecheck.fs" />
+    <Compile Include="TackyGen.fs" />
+    <Compile Include="optimizations\Optimize.fs" />
+    <Compile Include="optimizations\AddressTaken.fs" />
+    <Compile Include="backend\Codegen.fs" />
+    <Compile Include="backend\Regalloc.fs" />
+    <Compile Include="backend\ReplacePseudos.fs" />
+    <Compile Include="backend\InstructionFixup.fs" />
+    <Compile Include="Compile.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
 
