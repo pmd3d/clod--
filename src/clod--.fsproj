@@ -12,7 +12,7 @@
     <Compile Include="ast.fs" />
     <Compile Include="util\stringutil.fs" />
     <Compile Include="util\disjoint_sets.fs" />
-    <Compile Include="util\Make.fs" />
+
     <Compile Include="util\int8.fs" />
     <Compile Include="util\rounding.fs" />
     <Compile Include="util\unique_ids.fs" />
