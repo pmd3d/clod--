@@ -20,9 +20,12 @@ dotnet run
 
 ## Publish Standalone Executable
 
+WSL:
 ```bash
 dotnet publish -c Release --self-contained -p:PublishSingleFile=true
+```
 
-for linux:
+Linux:
+```bash
 dotnet publish -c Release --self-contained -p:PublishSingleFile=true -r linux-x64 -p:UseAppHost=true
 ```
