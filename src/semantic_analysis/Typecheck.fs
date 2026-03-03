@@ -31,15 +31,13 @@ let rec validateType = function
 let validateStructDefinition { U.tag = tag; U.members = members } =
     if TypeTable.mem tag then failwith "Structure was already declared"
     else
-        let member_names = ref Set.empty
-        let validateMember { U.memberName = member_name; U.memberType = member_type } =
-            if Set.contains member_name !member_names then
+        let validateMember member_names { U.memberName = member_name; U.memberType = member_type } =
+            if Set.contains member_name member_names then
                 failwith
                     ("Duplicate declaration of member "
                      + member_name
                      + " in structure "
                      + tag)
-            else member_names := Set.add member_name !member_names
             validateType member_type
             match member_type with
             | Types.FunType _ ->
@@ -47,7 +45,8 @@ let validateStructDefinition { U.tag = tag; U.members = members } =
             | _ ->
                 if isComplete member_type then ()
                 else failwith "Cannot declare structure member with incomplete type"
-        List.iter validateMember members
+            Set.add member_name member_names
+        List.fold validateMember Set.empty members |> ignore
 
 let typecheckStructDecl ({ U.tag = tag; U.members = members } as sd) =
     if members = [] then ()
