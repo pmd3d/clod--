@@ -16,38 +16,33 @@ type IdentifierAttrs =
 
 type SymbolEntry = { symType: Types.CType; attrs: IdentifierAttrs }
 
-let symbolTable = System.Collections.Generic.Dictionary<string, SymbolEntry>()
+let mutable private _symbolTable: Map<string, SymbolEntry> = Map.empty
 
 // always use replace instead of add; we want to remove old binding when we add a new one
 
 let addAutomaticVar name (t: Types.CType) =
-    symbolTable.[name] <- { symType = t; attrs = LocalAttr }
+    _symbolTable <- Map.add name { symType = t; attrs = LocalAttr } _symbolTable
 
 let addStaticVar name (t: Types.CType) (``global``: bool) (init: InitialValue) =
-    symbolTable.[name] <- { symType = t; attrs = StaticAttr { init = init; ``global`` = ``global`` } }
+    _symbolTable <- Map.add name { symType = t; attrs = StaticAttr { init = init; ``global`` = ``global`` } } _symbolTable
 
 let addFun name (t: Types.CType) (``global``: bool) (defined: bool) =
-    symbolTable.[name] <- { symType = t; attrs = FunAttr { ``global`` = ``global``; defined = defined } }
+    _symbolTable <- Map.add name { symType = t; attrs = FunAttr { ``global`` = ``global``; defined = defined } } _symbolTable
 
-let get name = symbolTable.[name]
+let get name = Map.find name _symbolTable
 
-let getOpt name =
-    match symbolTable.TryGetValue(name) with
-    | true, v -> Some v
-    | false, _ -> None
+let getOpt name = Map.tryFind name _symbolTable
 
 let addStringWithCounter (counter: UniqueIds.Counter) (s: string) =
     let counter', str_id = UniqueIds.makeNamedTemporary "string" counter
     let t = Types.Array (Types.Char, int64 (String.length s + 1))
-    symbolTable.[str_id] <-
-        { symType = t; attrs = ConstAttr (Initializers.StringInit (s, true)) }
+    _symbolTable <- Map.add str_id { symType = t; attrs = ConstAttr (Initializers.StringInit (s, true)) } _symbolTable
     (counter', str_id)
 
 let addString (s: string) =
     let str_id = UniqueIds.makeNamedTemporaryShared "string"
     let t = Types.Array (Types.Char, int64 (String.length s + 1))
-    symbolTable.[str_id] <-
-        { symType = t; attrs = ConstAttr (Initializers.StringInit (s, true)) }
+    _symbolTable <- Map.add str_id { symType = t; attrs = ConstAttr (Initializers.StringInit (s, true)) } _symbolTable
     str_id
 
 let isGlobal name =
@@ -56,8 +51,11 @@ let isGlobal name =
     | StaticAttr { ``global`` = g } -> g
     | FunAttr { ``global`` = g } -> g
 
-let bindings () =
-    symbolTable |> Seq.map (fun kv -> (kv.Key, kv.Value)) |> Seq.toList
+let bindings () = Map.toList _symbolTable
 
 let iter f =
-    symbolTable |> Seq.iter (fun kv -> f kv.Key kv.Value)
+    _symbolTable |> Map.iter f
+
+// Snapshot/restore for pipeline threading
+let getTable () = _symbolTable
+let setTable m = _symbolTable <- m

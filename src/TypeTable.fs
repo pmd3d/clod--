@@ -1,7 +1,5 @@
 ﻿module TypeTable
 
-open System.Collections.Generic
-
 (* structure type definitions *)
 
 type MemberDef = { member_type: Types.CType; offset: int }
@@ -12,13 +10,13 @@ type StructDef = {
     members: Map<string, MemberDef>
 }
 
-let typeTable: Dictionary<string, StructDef> = Dictionary<string, StructDef>(20)
+let mutable private _typeTable: Map<string, StructDef> = Map.empty
 
 let addStructDefinition tag structDef =
-    typeTable.[tag] <- structDef
+    _typeTable <- Map.add tag structDef _typeTable
 
-let mem tag = typeTable.ContainsKey(tag)
-let find tag = typeTable.[tag]
+let mem tag = Map.containsKey tag _typeTable
+let find tag = Map.find tag _typeTable
 
 let getMembers tag =
     let structDef = find tag
@@ -29,3 +27,7 @@ let getMembers tag =
     |> List.sortWith compareOffset
 
 let getMemberTypes tag = List.map (fun m -> m.member_type) (getMembers tag)
+
+// Snapshot/restore for pipeline threading
+let getTable () = _typeTable
+let setTable m = _typeTable <- m
