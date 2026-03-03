@@ -90,7 +90,7 @@ let foldLeftMap f acc xs =
 // Node type for the interference graph
 type AllocNode = {
     id : Assembly.AsmOperand
-    mutable neighbors : OperandSet
+    neighbors : OperandSet
     spillCost : float
     color : int option
     pruned : bool
@@ -325,13 +325,14 @@ type Allocator(R : RegTypeOps) =
         let addEdge g nd_id1 nd_id2 =
             let nd1 = Map.find nd_id1 g
             let nd2 = Map.find nd_id2 g
-            nd1.neighbors <- Set.add nd_id2 nd1.neighbors
-            nd2.neighbors <- Set.add nd_id1 nd2.neighbors
+            g |> Map.add nd_id1 { nd1 with neighbors = Set.add nd_id2 nd1.neighbors }
+              |> Map.add nd_id2 { nd2 with neighbors = Set.add nd_id1 nd2.neighbors }
 
         let removeEdge g nd_id1 nd_id2 =
-            let nd1, nd2 = (getNodeById g nd_id1, getNodeById g nd_id2)
-            nd1.neighbors <- Set.remove nd_id2 nd1.neighbors
-            nd2.neighbors <- Set.remove nd_id1 nd2.neighbors
+            let nd1 = getNodeById g nd_id1
+            let nd2 = getNodeById g nd_id2
+            g |> Map.add nd_id1 { nd1 with neighbors = Set.remove nd_id2 nd1.neighbors }
+              |> Map.add nd_id2 { nd2 with neighbors = Set.remove nd_id1 nd2.neighbors }
 
         let degree graph nd_id =
             let nd = getNodeById graph nd_id
@@ -342,24 +343,24 @@ type Allocator(R : RegTypeOps) =
             Set.contains nd_id2 nd1.neighbors
 
         let addEdges (livenessCfg: Cfg.ControlFlowGraph<Set<AsmOperand>, AsmInstruction>) interference_graph =
-            let handleInstr (liveAfterInstr, i) =
+            let handleInstr g (liveAfterInstr, i) =
                 let _, updatedRegs = regsUsedAndWritten i in
 
-                let handleLivereg l =
+                let handleLivereg g l =
                     match i with
-                    | Mov (_, src, _) when src = l -> ()
+                    | Mov (_, src, _) when src = l -> g
                     | _ ->
-                        let handleUpdate u =
+                        let handleUpdate g u =
                             if
                                 u <> l
-                                && Map.containsKey l interference_graph
-                                && Map.containsKey u interference_graph
-                            then addEdge interference_graph l u
-                            else ()
+                                && Map.containsKey l g
+                                && Map.containsKey u g
+                            then addEdge g l u
+                            else g
                         in
-                        Set.iter handleUpdate updatedRegs
+                        Set.fold handleUpdate g updatedRegs
                 in
-                Set.iter handleLivereg liveAfterInstr
+                Set.fold handleLivereg g liveAfterInstr
             in
 
             let allInstructions =
@@ -367,15 +368,14 @@ type Allocator(R : RegTypeOps) =
                     (fun (_, (blk: Cfg.BasicBlock<Set<AsmOperand>, AsmInstruction>)) -> blk.instructions)
                     livenessCfg.BasicBlocks
             in
-            List.iter handleInstr allInstructions
+            List.fold handleInstr interference_graph allInstructions
 
         let buildInterferenceGraph fn_name aliased_pseudos instructions =
             let baseGraph = mkBaseGraph () in
             let graph = addPseudoNodes aliased_pseudos baseGraph instructions in
             let cfg = AsmCfg.instructionsToCfg fn_name instructions in
             let livenessCfg = analyzeLiveness fn_name cfg in
-            addEdges livenessCfg graph;
-            graph
+            addEdges livenessCfg graph
 
         let addSpillCosts graph instructions =
             let incrCount (counts : Map<string, int>) pseudo =
@@ -433,11 +433,11 @@ type Allocator(R : RegTypeOps) =
                 | _ -> false
 
         let updateGraph g to_merge to_keep =
-            let updateNeighbor neighborId =
-                addEdge g neighborId to_keep
+            let updateNeighbor g neighborId =
+                let g = addEdge g neighborId to_keep
                 removeEdge g neighborId to_merge
             in
-            Set.iter updateNeighbor (getNodeById g to_merge).neighbors
+            let g = Set.fold updateNeighbor g (getNodeById g to_merge).neighbors
             Map.remove to_merge g
 
         let coalesce graph instructions =
