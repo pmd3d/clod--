@@ -141,17 +141,24 @@ let private addAllEdges simplify g =
     let labelMap =
         List.fold
             (fun lblMap (_, blk) ->
-                match simplify (snd (List.head blk.instructions)) with
-                | Label lbl -> Map.add lbl blk.id lblMap
-                | _ -> lblMap)
+                match blk.instructions with
+                | (_, firstInstr) :: _ ->
+                    match simplify firstInstr with
+                    | Label lbl -> Map.add lbl blk.id lblMap
+                    | _ -> lblMap
+                | [] -> lblMap)
             Map.empty g.BasicBlocks
 
     (* add outgoing edges from a single basic block *)
     let processNode g (id_num, block) =
         let next_block =
-            if id_num = fst (ListUtil.last g.BasicBlocks) then Exit
-            else Block(id_num + 1)
-        let _, last_instr = ListUtil.last block.instructions
+            match ListUtil.tryLast g.BasicBlocks with
+            | Some (lastIdx, _) when id_num = lastIdx -> Exit
+            | _ -> Block(id_num + 1)
+        let _, last_instr =
+            match ListUtil.tryLast block.instructions with
+            | Some x -> x
+            | None -> failwith "Internal error: empty basic block"
 
         match simplify last_instr with
         | Return -> addEdge block.id Exit g

@@ -169,7 +169,10 @@ let classifyNewStructure tag =
     let first, last =
         match scalar_types with
         | [] -> failwith "Internal error: empty scalar types for structure"
-        | _ -> (List.head scalar_types, ListUtil.last scalar_types)
+        | first :: _ ->
+            match ListUtil.tryLast scalar_types with
+            | Some last -> (first, last)
+            | None -> failwith "Internal error: empty scalar types for structure"
     if size > 8 then
       let first_class = if first = Types.Double then SSE else Integer
       let last_class = if last = Types.Double then SSE else Integer
@@ -350,7 +353,9 @@ let convertFunctionCall f args dst =
   (* load address of dest into DI *)
   let load_dst_instruction, first_intreg_idx =
     if return_on_stack then
-      ([ Assembly.Lea (convertVal (Option.get dst), Assembly.Reg Assembly.DI) ], 1)
+      match dst with
+      | Some d -> ([ Assembly.Lea (convertVal d, Assembly.Reg Assembly.DI) ], 1)
+      | None -> failwith "Internal error: return_on_stack but no dst"
     else ([], 0)
   in
 
@@ -376,7 +381,10 @@ let convertFunctionCall f args dst =
   let instructions = load_dst_instruction @ alignment_instruction in
   (* pass args in registers *)
   let pass_int_reg_arg idx (arg_t, arg) =
-    let r = List.item (idx + first_intreg_idx) intParamPassingRegs in
+    let r =
+        match List.tryItem (idx + first_intreg_idx) intParamPassingRegs with
+        | Some r -> r
+        | None -> failwith "Internal error: int register index out of bounds" in
     match arg_t with
     | Assembly.ByteArray { size = size } ->
         copyBytesToReg arg r size (* copy_thru_redzone arg r size *)
@@ -388,7 +396,10 @@ let convertFunctionCall f args dst =
 
   (* pass args in registers *)
   let pass_dbl_reg_arg idx arg =
-    let r = List.item idx dblParamPassingRegs in
+    let r =
+        match List.tryItem idx dblParamPassingRegs with
+        | Some r -> r
+        | None -> failwith "Internal error: dbl register index out of bounds" in
     Assembly.Mov (Assembly.Double, arg, Assembly.Reg r)
   in
   let instructions = instructions @ List.mapi pass_dbl_reg_arg dbl_reg_args in
@@ -437,14 +448,20 @@ let convertFunctionCall f args dst =
     match (dst, return_on_stack) with
     | Some _, false ->
         let get_int i (t, op) =
-          let r = List.item i int_ret_regs in
+          let r =
+              match List.tryItem i int_ret_regs with
+              | Some r -> r
+              | None -> failwith "Internal error: int return register index out of bounds" in
           match t with
           | Assembly.ByteArray { size = size } ->
               copyBytesFromReg r op size
           | _ -> [ Assembly.Mov (t, Assembly.Reg r, op) ]
         in
         let get_dbl i op =
-          let r = List.item i dbl_ret_regs in
+          let r =
+              match List.tryItem i dbl_ret_regs with
+              | Some r -> r
+              | None -> failwith "Internal error: dbl return register index out of bounds" in
           Assembly.Mov (Assembly.Double, Assembly.Reg r, op)
         in
         List.concat (List.mapi get_int int_retvals)
@@ -469,7 +486,11 @@ let convertReturnInstruction = function
           List.concat
             (List.mapi
                (fun i (t, op) ->
-                 let dst_reg = List.item i [ Assembly.AX; Assembly.DX ] in
+                 let dst_reg =
+                     match i with
+                     | 0 -> Assembly.AX
+                     | 1 -> Assembly.DX
+                     | _ -> failwith "Internal error: int return register index out of bounds" in
                  match t with
                  | Assembly.ByteArray { size = size } ->
                      copyBytesToReg op dst_reg
@@ -479,7 +500,9 @@ let convertReturnInstruction = function
         in
         let return_dbls =
           List.mapi
-            (fun i op -> Assembly.Mov (Assembly.Double, op, Assembly.Reg (List.item i [ Assembly.XMM0; Assembly.XMM1 ])))
+            (fun i op ->
+                let r = match i with 0 -> Assembly.XMM0 | 1 -> Assembly.XMM1 | _ -> failwith "Internal error: dbl return register index out of bounds"
+                Assembly.Mov (Assembly.Double, op, Assembly.Reg r))
             dbl_retvals
         in
         return_ints @ return_dbls @ [ Assembly.Ret ]
@@ -813,19 +836,27 @@ let passParams param_list return_on_stack =
   let copy_dst_ptr, remaining_int_regs =
     if return_on_stack then
       ( [ Assembly.Mov (Assembly.Quadword, Assembly.Reg Assembly.DI, Assembly.Memory (Assembly.BP, -8)) ],
-        List.tail intParamPassingRegs )
+        match intParamPassingRegs with
+        | _ :: rest -> rest
+        | [] -> failwith "Internal error: empty intParamPassingRegs" )
     else ([], intParamPassingRegs)
   in
   (* pass parameter in register *)
   let pass_in_int_register idx (param_t, param) =
-    let r = List.item idx remaining_int_regs in
+    let r =
+        match List.tryItem idx remaining_int_regs with
+        | Some r -> r
+        | None -> failwith "Internal error: int register index out of bounds" in
     match param_t with
     | Assembly.ByteArray { size = size } ->
         copyBytesFromReg r param size
     | _ -> [ Assembly.Mov (param_t, Assembly.Reg r, param) ]
   in
   let pass_in_dbl_register idx param =
-    let r = List.item idx dblParamPassingRegs in
+    let r =
+        match List.tryItem idx dblParamPassingRegs with
+        | Some r -> r
+        | None -> failwith "Internal error: dbl register index out of bounds" in
     Assembly.Mov (Assembly.Double, Assembly.Reg r, param)
   in
   let pass_on_stack idx (param_t, param) =

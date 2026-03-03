@@ -508,7 +508,10 @@ type Allocator(R : RegTypeOps) =
                         in
                         debugPrint "================================\n"
                         List.iter printSpillInfo remaining
-                        let spilled = ListUtil.min cmp remaining
+                        let spilled =
+                            match ListUtil.tryMin cmp remaining with
+                            | Some nd -> nd
+                            | None -> failwith "Internal error: no remaining nodes to spill"
                         debugPrint "Spill candidate: %s\n" (showNodeId spilled.id)
                         spilled
                 in
@@ -536,8 +539,13 @@ type Allocator(R : RegTypeOps) =
                     let c =
                         match nextNode.id with
                         | Reg r when not (List.contains r R.caller_saved_regs) ->
-                            ListUtil.max compare availableColors
-                        | _ -> ListUtil.min compare availableColors
+                            match ListUtil.tryMax compare availableColors with
+                            | Some c -> c
+                            | None -> failwith "Internal error: no available colors"
+                        | _ ->
+                            match ListUtil.tryMin compare availableColors with
+                            | Some c -> c
+                            | None -> failwith "Internal error: no available colors"
                     in
                     Map.change nextNode.id
                         (function
@@ -548,7 +556,10 @@ type Allocator(R : RegTypeOps) =
         let makeRegisterMap fn_name graph =
             let addColor colorMap nd_id (nd: AllocNode) =
                 match nd_id with
-                | Reg r -> Map.add (Option.get nd.color) r colorMap
+                | Reg r ->
+                    match nd.color with
+                    | Some c -> Map.add c r colorMap
+                    | None -> failwith "Internal error: hardreg node without color"
                 | _ -> colorMap
             in
             let colorsToRegs = Map.fold addColor Map.empty graph in
