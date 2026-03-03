@@ -179,9 +179,8 @@ let main argv =
     let stage = parseStage parseResult
     let target = parseTarget parseResult
     let debug = parseResult.GetValue(debugOption)
-    let libs = match parseResult.GetValue(libsOption) with
-                | null -> []
-                | arr -> arr |> Array.toList
+    let libs = parseResult.GetValue(libsOption) |> Option.ofObj
+               |> Option.map Array.toList |> Option.defaultValue []
     let src = parseResult.GetValue(srcFileArgument)
     if not (File.Exists(src)) then
         eprintfn "Error: file not found: %s" src
