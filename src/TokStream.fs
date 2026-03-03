@@ -10,17 +10,11 @@ let takeToken (tokens: TokStream) =
 
 let peek (tokens: TokStream) =
     match Stream.peek tokens with
-    (* non-empty stream *)
     | Some t -> t
-    (* empty stream - raise an exception, we'll catch it at top level *)
     | None -> raise End_of_stream
 
-let npeek = Stream.npeek
+let npeek n (tokens: TokStream) = Stream.npeek n tokens
 
-let isEmpty (tokens: TokStream) =
-    try
-        Stream.empty tokens
-        true
-    with Stream.Failure -> false
+let isEmpty (tokens: TokStream) = Stream.isEmpty tokens
 
 let ofList = Stream.ofList

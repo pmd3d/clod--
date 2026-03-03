@@ -1,4 +1,4 @@
-﻿module TestParser
+module TestParser
 
 open System
 open Xunit
@@ -10,10 +10,11 @@ let printConst c = sprintf "%A" c
 
 [<Fact>]
 let ``signed long constant`` () =
-    let resultString = 
+    let resultString =
         [ Tokens.ConstLong 4611686018427387904I ]
         |> TokStream.ofList
         |> Parse.parseConst
+        |> fst
         |> printConst
 
     Assert.Equal("ConstLong 4611686018427387904L", resultString)
@@ -24,6 +25,7 @@ let ``unsigned int constant`` () =
         [ Tokens.ConstUInt 4294967291I ]
         |> TokStream.ofList
         |> Parse.parseConst
+        |> fst
         |> printConst
 
     Assert.Equal("ConstUInt 4294967291u", resultString)
@@ -34,6 +36,7 @@ let ``unsigned long constant`` () =
         [ Tokens.ConstULong 18446744073709551611I ]
         |> TokStream.ofList
         |> Parse.parseConst
+        |> fst
         |> printConst
 
     Assert.Equal("ConstULong 18446744073709551611UL", resultString)
@@ -44,6 +47,7 @@ let ``expression`` () =
         [ Tokens.ConstInt 100; Tokens.Semicolon ]
         |> TokStream.ofList
         |> Parse.parseExp 40
+        |> fst
 
     Assert.Equal(Ast.UntypedExp.Constant (Const.ConstInt 100), result)
 
@@ -53,10 +57,11 @@ let ``statement`` () =
         [ Tokens.KWReturn; Tokens.ConstInt 4; Tokens.Semicolon ]
         |> TokStream.ofList
         |> Parse.parseStatement
+        |> fst
     Assert.Equal(Ast.Untyped.Return (Some (Ast.UntypedExp.Constant (Const.ConstInt 4))), result)
 
 [<Fact>]
 let ``error`` () =
-    Assert.Throws<Parse.ParseError>(fun () -> 
+    Assert.Throws<Parse.ParseError>(fun () ->
         [ Tokens.KWInt ] |> Parse.parse |> ignore
     )
