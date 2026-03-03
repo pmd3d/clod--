@@ -65,6 +65,5 @@ let compile (config: Settings.CompilerConfig) (stage: Settings.Stage) (optimizat
     with
     | Lexer.LexError msg -> Error (CompilerError.LexError msg)
     | Parse.ParseError msg -> Error (CompilerError.ParseError msg)
-    | TokStream.End_of_stream -> Error (CompilerError.ParseError "Unexpected end of file")
     | Failure msg when not (msg.StartsWith("Internal error")) ->
         Error (CompilerError.TypeError msg)

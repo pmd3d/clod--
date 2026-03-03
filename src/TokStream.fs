@@ -2,16 +2,13 @@ module TokStream
 
 type TokStream = Tokens.Token Stream.Stream
 
-exception End_of_stream
+let takeToken (tokens: TokStream) : Result<Tokens.Token * TokStream, string> =
+    match Stream.next tokens with
+    | Some (tok, rest) -> Ok (tok, rest)
+    | None -> Error "Unexpected end of file"
 
-let takeToken (tokens: TokStream) =
-    try Stream.next tokens
-    with Stream.Failure -> raise End_of_stream
-
-let peek (tokens: TokStream) =
-    match Stream.peek tokens with
-    | Some t -> t
-    | None -> raise End_of_stream
+let peek (tokens: TokStream) : Tokens.Token option =
+    Stream.peek tokens
 
 let npeek n (tokens: TokStream) = Stream.npeek n tokens
 
