@@ -2,7 +2,6 @@
 
 open TypeUtils
 open Const
-open System.Collections.Generic
 
 let intParamPassingRegs = [ Assembly.DI; Assembly.SI; Assembly.DX; Assembly.CX; Assembly.R8; Assembly.R9 ]
 
@@ -10,7 +9,7 @@ let dblParamPassingRegs =
   [ Assembly.XMM0; Assembly.XMM1; Assembly.XMM2; Assembly.XMM3; Assembly.XMM4; Assembly.XMM5; Assembly.XMM6; Assembly.XMM7 ]
 
 let zero = Assembly.Imm 0L
-let constants = new Dictionary<int64, string * int>()
+let mutable private _constants: Map<int64, string * int> = Map.empty
 
 let mutable private _counter : UniqueIds.Counter = 0
 
@@ -23,15 +22,15 @@ let addConstant alignmentOpt dbl =
   let alignment = defaultArg alignmentOpt 8
   let key = System.BitConverter.DoubleToInt64Bits dbl
   (* see if we've defined this double already *)
-  if constants.ContainsKey(key) then
-    let name, old_alignment = constants.[key]
+  match Map.tryFind key _constants with
+  | Some (name, old_alignment) ->
     (* update alignment to max of current and new *)
-    constants.[key] <- (name, max alignment old_alignment)
+    _constants <- Map.add key (name, max alignment old_alignment) _constants
     name
-  else
+  | None ->
     (* we haven't defined it yet, add it to the table *)
     let name = nextLabel "dbl"
-    constants.[key] <- (name, alignment)
+    _constants <- Map.add key (name, alignment) _constants
     name
 
 (* Get the operand type we should use to move an eightbyte of a struct.
@@ -179,14 +178,14 @@ let classifyNewStructure tag =
     else [ Integer ]
 
 (* memoize results of classifyStructure *)
-let classifiedStructures = new Dictionary<_,_>()
+let mutable private _classifiedStructures: Map<string, ParamClass list> = Map.empty
 
 let classifyStructure tag =
-  match classifiedStructures.TryGetValue tag with
-  | true, classes -> classes
-  | false, _ ->
+  match Map.tryFind tag _classifiedStructures with
+  | Some classes -> classes
+  | None ->
       let classes = classifyNewStructure tag
-      classifiedStructures.Add(tag, classes)
+      _classifiedStructures <- Map.add tag classes _classifiedStructures
       classes
 
 let classifyParamsHelper typed_asm_vals return_on_stack =
@@ -876,9 +875,7 @@ let convertTopLevel = function
       Assembly.StaticConstant
         { name = name; alignment = TypeUtils.getAlignment t; init = init }
 
-let convertConstant (kvp: KeyValuePair<int64, string * int>) =
-  let key = kvp.Key
-  let (name, alignment) = kvp.Value
+let convertConstant (key, (name, alignment)) =
   let dbl = System.BitConverter.Int64BitsToDouble key
   AssemblySymbols.addConstant name Assembly.Double
   Assembly.StaticConstant
@@ -912,12 +909,13 @@ let convertSymbol name = function
   | { Symbols.symType = t } -> AssemblySymbols.addVar name (convertVarType t) false
 
 let gen counter (Tacky.Program top_levels) =
-  (* clear the hashtable (necessary if we're compiling multiple source) *)
-  constants.Clear()
+  (* clear state (necessary if we're compiling multiple source) *)
+  _constants <- Map.empty
   _counter <- counter
   let tls = List.map convertTopLevel top_levels
   let constants_list =
-    constants
+    _constants
+    |> Map.toSeq
     |> Seq.map convertConstant
     |> List.ofSeq
 
