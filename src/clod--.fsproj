@@ -18,6 +18,7 @@
     <Compile Include="util\Rounding.fs" />
     <Compile Include="util\UniqueIds.fs" />
     <Compile Include="util\ListUtil.fs" />
+    <Compile Include="util\ResultCE.fs" />
     <Compile Include="Settings.fs" />
     <Compile Include="TypeTable.fs" />
     <Compile Include="util\TypeUtils.fs" />
