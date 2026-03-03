@@ -4,7 +4,7 @@ open System.Text.RegularExpressions
 
 module T = Tokens
 
-exception LexError of string
+open ResultCE
 
 type TokenDef =
     { re: Regex
@@ -133,16 +133,16 @@ let countLeadingWs s =
     if m.Success then Some m.Length
     else None
 
-let rec lex input =
+let rec lex input : Result<Tokens.Token list, string> =
     if input = "" then
-        []
+        Ok []
     else
         match countLeadingWs input with
         | Some wsCount -> lex (StringUtil.drop wsCount input)
         | None ->
             let matches: MatchDef List = List.choose (findMatch input) tokenDefs
             if matches.Length = 0 then
-                raise (LexError input)
+                Error input
             else
                 let longestMatch =
                     matches
@@ -154,4 +154,7 @@ let rec lex input =
                     StringUtil.drop
                         longestMatch.matchedSubstring.Length
                         input
-                nextTok :: lex remaining
+                result {
+                    let! rest = lex remaining
+                    return nextTok :: rest
+                }

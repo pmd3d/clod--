@@ -1,9 +1,14 @@
 module Compile
 
+exception private LexError of string
+
 let private compileInner (config: Settings.CompilerConfig) (stage: Settings.Stage) (optimizations: Settings.Optimizations) (src_file: string) (source: string) =
     let counter = UniqueIds.initialCounter
     // Lex it
-    let tokens = Lexer.lex source
+    let tokens =
+        match Lexer.lex source with
+        | Ok toks -> toks
+        | Error msg -> raise (LexError msg)
     if stage = Settings.Lex then ()
     else
         let ast = Parse.parse tokens
@@ -63,7 +68,7 @@ let compile (config: Settings.CompilerConfig) (stage: Settings.Stage) (optimizat
     try
         Ok (compileInner config stage optimizations src_file source)
     with
-    | Lexer.LexError msg -> Error (CompilerError.LexError msg)
+    | LexError msg -> Error (CompilerError.LexError msg)
     | Parse.ParseError msg -> Error (CompilerError.ParseError msg)
     | Failure msg when not (msg.StartsWith("Internal error")) ->
         Error (CompilerError.TypeError msg)
