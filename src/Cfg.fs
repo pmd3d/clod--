@@ -49,16 +49,16 @@ type NodeId =
 type BasicBlock<'v, 'instr> = {
     id: NodeId
     instructions: ('v * 'instr) list
-    mutable preds: NodeId list
-    mutable succs: NodeId list
+    preds: NodeId list
+    succs: NodeId list
     value: 'v
 }
 
 type ControlFlowGraph<'v, 'instr> = {
     (* store basic blocks in association list, indexed by block # *)
     BasicBlocks: (int * BasicBlock<'v, 'instr>) list
-    mutable entrySuccs: NodeId list
-    mutable exitPreds: NodeId list
+    entrySuccs: NodeId list
+    exitPreds: NodeId list
     debugLabel: string
 }
 
@@ -76,34 +76,38 @@ let getSuccs ndId cfg =
 let getBlockValue blocknum cfg =
     (findBlock blocknum cfg.BasicBlocks).value
 
+let private updateBlock f blockNum g =
+    let newBlocks =
+        List.map
+            (fun ((i, blk) as entry) ->
+                if i = blockNum then (i, f blk) else entry)
+            g.BasicBlocks
+    { g with BasicBlocks = newBlocks }
+
 let private updateSuccessors f ndId g =
     match ndId with
-    | Entry -> g.entrySuccs <- f g.entrySuccs
-    | Block n ->
-        let blk = findBlock n g.BasicBlocks
-        blk.succs <- f blk.succs
+    | Entry -> { g with entrySuccs = f g.entrySuccs }
+    | Block n -> updateBlock (fun blk -> { blk with succs = f blk.succs }) n g
     | Exit -> failwith "Internal error: malformed CFG"
 
 let private updatePredecessors f ndId g =
     match ndId with
     | Entry -> failwith "Internal error: malformed CFG"
-    | Block n ->
-        let blk = findBlock n g.BasicBlocks
-        blk.preds <- f blk.preds
-    | Exit -> g.exitPreds <- f g.exitPreds
+    | Block n -> updateBlock (fun blk -> { blk with preds = f blk.preds }) n g
+    | Exit -> { g with exitPreds = f g.exitPreds }
 
 let addEdge pred succ g =
     let addId ndId idList =
         if List.contains ndId idList then idList
         else ndId :: idList
-    updateSuccessors (addId succ) pred g
-    updatePredecessors (addId pred) succ g
+    g |> updateSuccessors (addId succ) pred
+      |> updatePredecessors (addId pred) succ
 
 let removeEdge pred succ g =
     let removeId ndId idList =
         List.filter (fun i -> i <> ndId) idList
-    updateSuccessors (removeId succ) pred g
-    updatePredecessors (removeId pred) succ g
+    g |> updateSuccessors (removeId succ) pred
+      |> updatePredecessors (removeId pred) succ
 
 (* replace block with given block ID *)
 let updateBasicBlock blockIdx newBlock g =
@@ -143,7 +147,7 @@ let private addAllEdges simplify g =
             Map.empty g.BasicBlocks
 
     (* add outgoing edges from a single basic block *)
-    let processNode (id_num, block) =
+    let processNode g (id_num, block) =
         let next_block =
             if id_num = fst (ListUtil.last g.BasicBlocks) then Exit
             else Block(id_num + 1)
@@ -156,12 +160,12 @@ let private addAllEdges simplify g =
             addEdge block.id target_id g
         | ConditionalJump target ->
             let target_id = Map.find target labelMap
-            addEdge block.id next_block g
-            addEdge block.id target_id g
+            g |> addEdge block.id next_block
+              |> addEdge block.id target_id
         | _ -> addEdge block.id next_block g
 
-    addEdge Entry (Block 0) g
-    List.iter processNode g.BasicBlocks
+    let g = addEdge Entry (Block 0) g
+    List.fold processNode g g.BasicBlocks
 
 let instructionsToCfg simplify debugLabel instructions =
     let toNode idx instructions =
@@ -181,7 +185,6 @@ let instructionsToCfg simplify debugLabel instructions =
           debugLabel = debugLabel }
 
     addAllEdges simplify cfg
-    cfg
 
 (* converting back to instructions *)
 let cfgToInstructions g =
