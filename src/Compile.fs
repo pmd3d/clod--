@@ -1,6 +1,7 @@
 module Compile
 
 exception private LexError of string
+exception private ParseError of string
 
 let private compileInner (config: Settings.CompilerConfig) (stage: Settings.Stage) (optimizations: Settings.Optimizations) (src_file: string) (source: string) =
     let counter = UniqueIds.initialCounter
@@ -11,7 +12,10 @@ let private compileInner (config: Settings.CompilerConfig) (stage: Settings.Stag
         | Error msg -> raise (LexError msg)
     if stage = Settings.Lex then ()
     else
-        let ast = Parse.parse tokens
+        let ast =
+            match Parse.parse tokens with
+            | Ok a -> a
+            | Error msg -> raise (ParseError msg)
         if stage = Settings.Parse then
             printf "%A" ast
         else
@@ -69,6 +73,6 @@ let compile (config: Settings.CompilerConfig) (stage: Settings.Stage) (optimizat
         Ok (compileInner config stage optimizations src_file source)
     with
     | LexError msg -> Error (CompilerError.LexError msg)
-    | Parse.ParseError msg -> Error (CompilerError.ParseError msg)
+    | ParseError msg -> Error (CompilerError.ParseError msg)
     | Failure msg when not (msg.StartsWith("Internal error")) ->
         Error (CompilerError.TypeError msg)
