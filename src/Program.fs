@@ -40,10 +40,16 @@ let preprocess (src: string) =
     output
 
 let compile (config: Settings.CompilerConfig) (stage: Settings.Stage) (optimizations: Settings.Optimizations) (preprocessedSrc: string) =
-    let _ = Compile.compile config stage optimizations preprocessedSrc
-    (* remove preprocessed src *)
-    runCommand "rm" [ preprocessedSrc ]
-    replaceExtension preprocessedSrc ".s"
+    match Compile.compile config stage optimizations preprocessedSrc with
+    | Ok () ->
+        (* remove preprocessed src *)
+        runCommand "rm" [ preprocessedSrc ]
+        replaceExtension preprocessedSrc ".s"
+    | Error err ->
+        (* remove preprocessed src even on error *)
+        runCommand "rm" [ preprocessedSrc ]
+        eprintfn "%s" (CompilerError.show err)
+        exit 1
 
 let assembleAndLink (link: bool) (cleanup: bool) (libs: string list) (src: string) =
     let linkOption = if link then [] else [ "-c" ]

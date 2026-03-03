@@ -1,6 +1,6 @@
 module Compile
 
-let compile (config: Settings.CompilerConfig) (stage: Settings.Stage) (optimizations: Settings.Optimizations) (src_file: string) =
+let private compileInner (config: Settings.CompilerConfig) (stage: Settings.Stage) (optimizations: Settings.Optimizations) (src_file: string) =
     // read in the file - TODO use streams?
     let source = System.IO.File.ReadAllText(src_file)
     let counter = UniqueIds.initialCounter
@@ -60,3 +60,13 @@ let compile (config: Settings.CompilerConfig) (stage: Settings.Stage) (optimizat
                     else
                         let asm_filename = System.IO.Path.ChangeExtension(src_file, ".s")
                         Emit.emit config.Platform asm_filename asm_ast3
+
+let compile (config: Settings.CompilerConfig) (stage: Settings.Stage) (optimizations: Settings.Optimizations) (src_file: string) : Result<unit, CompilerError.CompilerError> =
+    try
+        Ok (compileInner config stage optimizations src_file)
+    with
+    | Lexer.LexError msg -> Error (CompilerError.LexError msg)
+    | Parse.ParseError msg -> Error (CompilerError.ParseError msg)
+    | TokStream.End_of_stream -> Error (CompilerError.ParseError "Unexpected end of file")
+    | Failure msg when not (msg.StartsWith("Internal error")) ->
+        Error (CompilerError.TypeError msg)
