@@ -18,9 +18,11 @@ type IntMap<'v> = Map<int, 'v>
 
 // DisjointSets is used directly (F# has no functors)
 
+let mutable private _debug = false
+
 let debugPrint fmt =
     Printf.kprintf
-        (fun msg -> if !Settings.Debug then printf "%s" msg)
+        (fun msg -> if _debug then printf "%s" msg)
         fmt
 
 // extract all operands from an instruction.
@@ -248,6 +250,7 @@ type Allocator(R : RegTypeOps) =
 
     let analyzeLiveness fn_name cfg =
         Backward_dataflow.analyze
+            _debug
             ppOperand
             (Set.empty : Set<AsmOperand>)
             (=)
@@ -616,7 +619,8 @@ let XMM = new Allocator ({
     pseudo_is_current_type = fun p -> AssemblySymbols.getType p = Double
 })
 
-let allocateRegisters aliased_pseudos (Program tls) =
+let allocateRegisters debug aliased_pseudos (Program tls) =
+    _debug <- debug
     let allocateRegsForFun fnName instructions =
         instructions
         |> GP.allocate fnName aliased_pseudos

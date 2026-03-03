@@ -1,6 +1,6 @@
 ﻿module Compile
 
-let compile (stage: Settings.Stage) (optimizations: Settings.Optimizations) (src_file: string) =
+let compile (config: Settings.CompilerConfig) (stage: Settings.Stage) (optimizations: Settings.Optimizations) (src_file: string) =
     // read in the file - TODO use streams?
     let source = System.IO.File.ReadAllText(src_file)
     // Lex it
@@ -24,7 +24,7 @@ let compile (stage: Settings.Stage) (optimizations: Settings.Optimizations) (src
                 let tacky = TackyGen.gen typed_ast
                 // print to file (src filename with .debug.tacky extension) if debug is
                 // enabled
-                Tacky_print.debugPrintTacky src_file tacky
+                Tacky_print.debugPrintTacky config.Debug src_file tacky
                 // optimize it!
                 let optimized_tacky = Optimize.optimize optimizations src_file tacky
                 if stage = Settings.Tacky then ()
@@ -36,20 +36,20 @@ let compile (stage: Settings.Stage) (optimizations: Settings.Optimizations) (src
                     // 1. convert TACKY to assembly
                     let asm_ast = Codegen.gen optimized_tacky
                     // print pre-pseudoreg-allocation assembly if debug enabled
-                    if Settings.Debug.Value then
+                    if config.Debug then
                         let prealloc_filename =
                             System.IO.Path.ChangeExtension(src_file, null) + ".prealloc.debug.s"
-                        Emit.emit prealloc_filename asm_ast
+                        Emit.emit config.Platform prealloc_filename asm_ast
                     // replace remaining pseudoregisters with Data/Stack operands
-                    let asm_ast1 = Regalloc.allocateRegisters aliased_vars asm_ast
-                    if Settings.Debug.Value then
+                    let asm_ast1 = Regalloc.allocateRegisters config.Debug aliased_vars asm_ast
+                    if config.Debug then
                         let postalloc_filename =
                             System.IO.Path.ChangeExtension(src_file, null) + ".postalloc.debug.s"
-                        Emit.emit postalloc_filename asm_ast
+                        Emit.emit config.Platform postalloc_filename asm_ast
                     let asm_ast2 = ReplacePseudos.replacePseudos asm_ast1
                     // fix up instructions
                     let asm_ast3 = InstructionFixup.fixupProgram asm_ast2
                     if stage = Settings.Codegen then ()
                     else
                         let asm_filename = System.IO.Path.ChangeExtension(src_file, ".s")
-                        Emit.emit asm_filename asm_ast3
+                        Emit.emit config.Platform asm_filename asm_ast3

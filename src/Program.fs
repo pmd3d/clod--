@@ -39,8 +39,8 @@ let preprocess (src: string) =
     let _ = runCommand "gcc" [ "-E"; "-P"; src; "-o"; output ]
     output
 
-let compile (stage: Settings.Stage) (optimizations: Settings.Optimizations) (preprocessedSrc: string) =
-    let _ = Compile.compile stage optimizations preprocessedSrc
+let compile (config: Settings.CompilerConfig) (stage: Settings.Stage) (optimizations: Settings.Optimizations) (preprocessedSrc: string) =
+    let _ = Compile.compile config stage optimizations preprocessedSrc
     (* remove preprocessed src *)
     runCommand "rm" [ preprocessedSrc ]
     replaceExtension preprocessedSrc ".s"
@@ -60,8 +60,9 @@ let assembleAndLink (link: bool) (cleanup: bool) (libs: string list) (src: strin
 let driver (target: Settings.Target) (debug: bool) (libs: string list) (stage: Settings.Stage) (optimizations: Settings.Optimizations) (src: string) =
     Settings.Platform := target
     Settings.Debug := debug
+    let config = { Settings.Platform = target; Settings.Debug = debug }
     let preprocessedName = preprocess src
-    let assemblyName = compile stage optimizations preprocessedName
+    let assemblyName = compile config stage optimizations preprocessedName
     match stage with
     | Settings.Executable ->
         assembleAndLink true (not debug) libs assemblyName

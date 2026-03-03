@@ -12,6 +12,11 @@ type Stage =
 
 type Target = OS_X | Linux
 
+type CompilerConfig = {
+    Platform: Target
+    Debug: bool
+}
+
 let Platform = ref Linux // default to linux
 let Debug = ref false
 

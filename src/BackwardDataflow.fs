@@ -4,13 +4,13 @@ type Annotation<'varSet> = 'varSet
 type AnnotatedBlock<'a, 'block> = Cfg.BasicBlock<'a, 'block>
 type AnnotatedGraph<'a, 'block> = Cfg.ControlFlowGraph<'a, 'block>
 
-let debugPrint (extra_tag: string) (pp_var: System.IO.TextWriter -> 'var -> unit)
+let debugPrint (debug: bool) (extra_tag: string) (pp_var: System.IO.TextWriter -> 'var -> unit)
                 (elements: 'varSet -> 'var list)
                 (print_graphviz: (System.IO.TextWriter -> 'varSet -> unit) -> 'cfg -> unit)
                 (debugLabel: string)
                 (setDebugLabel: string -> 'cfg -> 'cfg)
                 (cfg: 'cfg) =
-    if Settings.Debug.Value then
+    if debug then
         let livevarPrinter (fmt: System.IO.TextWriter) (liveVars: 'varSet) =
             elements liveVars
             |> List.iteri (fun i v ->
@@ -19,7 +19,7 @@ let debugPrint (extra_tag: string) (pp_var: System.IO.TextWriter -> 'var -> unit
         let lbl = debugLabel + "_dse" + extra_tag
         print_graphviz livevarPrinter (setDebugLabel lbl cfg)
 
-let analyze (pp_var: System.IO.TextWriter -> 'var -> unit)
+let analyze (debug: bool) (pp_var: System.IO.TextWriter -> 'var -> unit)
             (empty: 'varSet)
             (equal: 'varSet -> 'varSet -> bool)
             (elements: 'varSet -> 'var list)
@@ -37,7 +37,7 @@ let analyze (pp_var: System.IO.TextWriter -> 'var -> unit)
     let startingCfg = initialize_annotation cfg empty
     let rec processWorklist (currentCfg: 'cfg)
                              (worklist: (int * 'block) list) =
-        debugPrint "_in_progress_" pp_var elements print_graphviz
+        debugPrint debug "_in_progress_" pp_var elements print_graphviz
             (getDebugLabel currentCfg) setDebugLabel currentCfg
         match worklist with
         | [] -> currentCfg // we're done

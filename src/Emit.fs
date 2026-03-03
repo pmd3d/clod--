@@ -1,4 +1,4 @@
-﻿module Emit
+module Emit
 
 open Assembly
 
@@ -11,23 +11,23 @@ let suffix = function
         failwith
             "Internal error: found instruction w/ non-scalar operand type"
 
-let alignDirective =
-    match !Settings.Platform with
+let alignDirective platform =
+    match platform with
     | Settings.OS_X -> ".balign"
     | Settings.Linux -> ".align"
 
-let showLabel name =
-    match !Settings.Platform with
+let showLabel platform name =
+    match platform with
     | Settings.OS_X -> "_" + name
     | Settings.Linux -> name
 
-let showLocalLabel label =
-    match !Settings.Platform with
+let showLocalLabel platform label =
+    match platform with
     | Settings.OS_X -> "L" + label
     | Settings.Linux -> ".L" + label
 
-let showFunName f =
-    match !Settings.Platform with
+let showFunName platform f =
+    match platform with
     | Settings.OS_X -> "_" + f
     | Settings.Linux ->
         if AssemblySymbols.isDefined f then f else f + "@PLT"
@@ -115,7 +115,7 @@ let showByteReg = function
     | _ ->
         failwith "Internal error: can't store byte type in XMM register"
 
-let showOperand t = function
+let showOperand platform t = function
     | Reg r ->
         (match t with
         | Byte -> showByteReg r
@@ -131,8 +131,8 @@ let showOperand t = function
     | Data(name, offset) ->
         let lbl =
             if AssemblySymbols.isConstant name then
-                showLocalLabel name
-            else showLabel name
+                showLocalLabel platform name
+            else showLabel platform name
         if offset = 0 then sprintf "%s(%%rip)" lbl
         else sprintf "%s+%d(%%rip)" lbl offset
     | Indexed { ``base`` = b; index = index; scale = scale } ->
@@ -142,9 +142,9 @@ let showOperand t = function
     | Pseudo name -> sprintf "%%%s" name
     | PseudoMem(name, offset) -> sprintf "%d(%%%s)" offset name
 
-let showByteOperand = function
+let showByteOperand platform = function
     | Reg r -> showByteReg r
-    | other -> showOperand Longword other
+    | other -> showOperand platform Longword other
 
 let showUnaryInstruction = function
     | Neg -> "neg"
@@ -176,91 +176,91 @@ let showCondCode = function
     | B -> "b"
     | BE -> "be"
 
-let emitInstruction (chan: System.IO.StreamWriter) = function
+let emitInstruction platform (chan: System.IO.StreamWriter) = function
     | Mov(t, src, dst) ->
         chan.Write(
-            sprintf "\tmov%s %s, %s\n" (suffix t) (showOperand t src)
-                (showOperand t dst))
+            sprintf "\tmov%s %s, %s\n" (suffix t) (showOperand platform t src)
+                (showOperand platform t dst))
     | Unary(operator, t, dst) ->
         chan.Write(
             sprintf "\t%s%s %s\n"
                 (showUnaryInstruction operator)
-                (suffix t) (showOperand t dst))
+                (suffix t) (showOperand platform t dst))
     | Binary { op = Xor; t = Double; src = src; dst = dst } ->
         chan.Write(
-            sprintf "\txorpd %s, %s\n" (showOperand Double src)
-                (showOperand Double dst))
+            sprintf "\txorpd %s, %s\n" (showOperand platform Double src)
+                (showOperand platform Double dst))
     | Binary { op = Mult; t = Double; src = src; dst = dst } ->
         chan.Write(
-            sprintf "\tmulsd %s, %s\n" (showOperand Double src)
-                (showOperand Double dst))
+            sprintf "\tmulsd %s, %s\n" (showOperand platform Double src)
+                (showOperand platform Double dst))
     | Binary { op = op; t = t; src = src; dst = dst } ->
         chan.Write(
             sprintf "\t%s%s %s, %s\n"
                 (showBinaryInstruction op)
-                (suffix t) (showOperand t src) (showOperand t dst))
+                (suffix t) (showOperand platform t src) (showOperand platform t dst))
     | Cmp(Double, src, dst) ->
         chan.Write(
-            sprintf "\tcomisd %s, %s\n" (showOperand Double src)
-                (showOperand Double dst))
+            sprintf "\tcomisd %s, %s\n" (showOperand platform Double src)
+                (showOperand platform Double dst))
     | Cmp(t, src, dst) ->
         chan.Write(
-            sprintf "\tcmp%s %s, %s\n" (suffix t) (showOperand t src)
-                (showOperand t dst))
+            sprintf "\tcmp%s %s, %s\n" (suffix t) (showOperand platform t src)
+                (showOperand platform t dst))
     | Idiv(t, operand) ->
         chan.Write(
-            sprintf "\tidiv%s %s\n" (suffix t) (showOperand t operand))
+            sprintf "\tidiv%s %s\n" (suffix t) (showOperand platform t operand))
     | Div(t, operand) ->
         chan.Write(
-            sprintf "\tdiv%s %s\n" (suffix t) (showOperand t operand))
+            sprintf "\tdiv%s %s\n" (suffix t) (showOperand platform t operand))
     | Lea(src, dst) ->
         chan.Write(
             sprintf "\tleaq %s, %s\n"
-                (showOperand Quadword src)
-                (showOperand Quadword dst))
+                (showOperand platform Quadword src)
+                (showOperand platform Quadword dst))
     | Cdq Longword -> chan.Write("\tcdq\n")
     | Cdq Quadword -> chan.Write("\tcqo\n")
     | Jmp lbl ->
-        chan.Write(sprintf "\tjmp %s\n" (showLocalLabel lbl))
+        chan.Write(sprintf "\tjmp %s\n" (showLocalLabel platform lbl))
     | JmpCC(code, lbl) ->
         chan.Write(
             sprintf "\tj%s %s\n" (showCondCode code)
-                (showLocalLabel lbl))
+                (showLocalLabel platform lbl))
     | SetCC(code, operand) ->
         chan.Write(
             sprintf "\tset%s %s\n" (showCondCode code)
-                (showByteOperand operand))
+                (showByteOperand platform operand))
     | Label lbl ->
-        chan.Write(sprintf "%s:\n" (showLocalLabel lbl))
+        chan.Write(sprintf "%s:\n" (showLocalLabel platform lbl))
     | Push op ->
         chan.Write(
-            sprintf "\tpushq %s\n" (showOperand Quadword op))
+            sprintf "\tpushq %s\n" (showOperand platform Quadword op))
     | Pop r ->
         chan.Write(sprintf "\tpopq %s\n" (showQuadwordReg r))
     | Call f ->
-        chan.Write(sprintf "\tcall %s\n" (showFunName f))
+        chan.Write(sprintf "\tcall %s\n" (showFunName platform f))
     | Movsx { src_type = src_type; dst_type = dst_type; src = src;
               dst = dst } ->
         chan.Write(
             sprintf "\tmovs%s%s %s, %s\n" (suffix src_type)
                 (suffix dst_type)
-                (showOperand src_type src)
-                (showOperand dst_type dst))
+                (showOperand platform src_type src)
+                (showOperand platform dst_type dst))
     | MovZeroExtend { src_type = src_type; dst_type = dst_type;
                       src = src; dst = dst } ->
         chan.Write(
             sprintf "\tmovz%s%s %s, %s\n" (suffix src_type)
                 (suffix dst_type)
-                (showOperand src_type src)
-                (showOperand dst_type dst))
+                (showOperand platform src_type src)
+                (showOperand platform dst_type dst))
     | Cvtsi2sd(t, src, dst) ->
         chan.Write(
             sprintf "\tcvtsi2sd%s %s, %s\n" (suffix t)
-                (showOperand t src) (showOperand Double dst))
+                (showOperand platform t src) (showOperand platform Double dst))
     | Cvttsd2si(t, src, dst) ->
         chan.Write(
             sprintf "\tcvttsd2si%s %s, %s\n" (suffix t)
-                (showOperand Double src) (showOperand t dst))
+                (showOperand platform Double src) (showOperand platform t dst))
     | Ret ->
         chan.Write(
             "\n\tmovq %rbp, %rsp\n\tpopq %rbp\n\tret\n")
@@ -281,7 +281,7 @@ let escape s =
     String.concat ""
         (s |> Seq.map escapeChar |> Seq.toList)
 
-let emitInit (chan: System.IO.StreamWriter) = function
+let emitInit platform (chan: System.IO.StreamWriter) = function
     | Initializers.IntInit i ->
         chan.Write(sprintf "\t.long %s\n" (string i))
     | Initializers.LongInit l ->
@@ -307,11 +307,11 @@ let emitInit (chan: System.IO.StreamWriter) = function
     | Initializers.StringInit(s, false) ->
         chan.Write(sprintf "\t.ascii \"%s\"\n" (escape s))
     | Initializers.PointerInit lbl ->
-        chan.Write(sprintf "\t.quad %s\n" (showLocalLabel lbl))
+        chan.Write(sprintf "\t.quad %s\n" (showLocalLabel platform lbl))
 
-let emitConstant (chan: System.IO.StreamWriter) name alignment init =
+let emitConstant platform (chan: System.IO.StreamWriter) name alignment init =
     let constantSectionName =
-        match (!Settings.Platform, init) with
+        match (platform, init) with
         | Settings.Linux, _ -> ".section .rodata"
         | Settings.OS_X, Initializers.StringInit _ -> ".cstring"
         | Settings.OS_X, _ ->
@@ -322,50 +322,50 @@ let emitConstant (chan: System.IO.StreamWriter) name alignment init =
                     "Internal error: found constant with bad alignment"
     chan.Write(
         sprintf "\n\t%s\n\t%s %d\n  %s:\n"
-            constantSectionName alignDirective alignment
-            (showLocalLabel name))
-    emitInit chan init
+            constantSectionName (alignDirective platform) alignment
+            (showLocalLabel platform name))
+    emitInit platform chan init
     (* macOS linker gets cranky if you write only 8 bytes to .literal16 section *)
     if constantSectionName = ".literal16" then
-        emitInit chan (Initializers.LongInit 0L)
+        emitInit platform chan (Initializers.LongInit 0L)
 
-let emitTl (chan: System.IO.StreamWriter) = function
+let emitTl platform (chan: System.IO.StreamWriter) = function
     | Function { name = name; ``global`` = isGlobal;
                  instructions = instructions } ->
-        let label = showLabel name
+        let label = showLabel platform name
         emitGlobalDirective chan isGlobal label
         chan.Write(
             sprintf "\n\t.text\n%s:\n\tpushq %%rbp\n\tmovq %%rsp, %%rbp\n"
                 label)
-        List.iter (emitInstruction chan) instructions
+        List.iter (emitInstruction platform chan) instructions
     | StaticVariable { name = name; ``global`` = isGlobal; init = init;
                        alignment = alignment }
         when List.forall Initializers.isZero init ->
-        let label = showLabel name
+        let label = showLabel platform name
         emitGlobalDirective chan isGlobal label
         chan.Write(
             sprintf "\n\t.bss\n\t%s %d\n%s:\n"
-                alignDirective alignment label)
-        List.iter (emitInit chan) init
+                (alignDirective platform) alignment label)
+        List.iter (emitInit platform chan) init
     | StaticVariable { name = name; ``global`` = isGlobal; init = init;
                        alignment = alignment } ->
-        let label = showLabel name
+        let label = showLabel platform name
         emitGlobalDirective chan isGlobal label
         chan.Write(
             sprintf "\n\t.data\n\t%s %d\n%s:\n"
-                alignDirective alignment label)
-        List.iter (emitInit chan) init
+                (alignDirective platform) alignment label)
+        List.iter (emitInit platform chan) init
     | StaticConstant { name = name; alignment = alignment; init = init } ->
-        emitConstant chan name alignment init
+        emitConstant platform chan name alignment init
 
-let emitStackNote (chan: System.IO.StreamWriter) =
-    match !Settings.Platform with
+let emitStackNote platform (chan: System.IO.StreamWriter) =
+    match platform with
     | Settings.OS_X -> ()
     | Settings.Linux ->
         chan.Write("\t.section .note.GNU-stack,\"\",@progbits\n")
 
-let emit assembly_file (Program tls) =
+let emit platform assembly_file (Program tls) =
     use outputChannel = new System.IO.StreamWriter(assembly_file : string)
-    List.iter (emitTl outputChannel) tls
-    emitStackNote outputChannel
+    List.iter (emitTl platform outputChannel) tls
+    emitStackNote platform outputChannel
     outputChannel.Flush()
