@@ -12,6 +12,13 @@ let dblParamPassingRegs =
 let zero = Assembly.Imm 0L
 let constants = new Dictionary<int64, string * int>()
 
+let mutable private _counter : UniqueIds.Counter = 0
+
+let private nextLabel prefix =
+    let c, name = UniqueIds.makeLabel prefix _counter
+    _counter <- c
+    name
+
 let addConstant alignmentOpt dbl =
   let alignment = defaultArg alignmentOpt 8
   let key = System.BitConverter.DoubleToInt64Bits dbl
@@ -23,7 +30,7 @@ let addConstant alignmentOpt dbl =
     name
   else
     (* we haven't defined it yet, add it to the table *)
-    let name = UniqueIds.makeLabel "dbl"
+    let name = nextLabel "dbl"
     constants.[key] <- (name, alignment)
     name
 
@@ -699,8 +706,8 @@ let convertInstruction = function
           Assembly.Cvtsi2sd (Assembly.Quadword, Assembly.Reg Assembly.R9, asm_dst);
         ]
       else
-        let out_of_bounds = UniqueIds.makeLabel "ulong2dbl.oob" in
-        let end_lbl = UniqueIds.makeLabel "ulong2dbl.end" in
+        let out_of_bounds = nextLabel "ulong2dbl.oob" in
+        let end_lbl = nextLabel "ulong2dbl.end" in
         let r1, r2 = (Assembly.Reg Assembly.R8, Assembly.Reg Assembly.R9) in
         [
           (* check whether asm_src is w/in range of long *)
@@ -733,8 +740,8 @@ let convertInstruction = function
             Assembly.Mov (Assembly.Longword, Assembly.Reg Assembly.R9, asm_dst);
           ]
       else
-        let out_of_bounds = UniqueIds.makeLabel "dbl2ulong.oob" in
-        let end_lbl = UniqueIds.makeLabel "dbl2ulong.end" in
+        let out_of_bounds = nextLabel "dbl2ulong.oob" in
+        let end_lbl = nextLabel "dbl2ulong.end" in
         let upper_bound = addConstant None 9223372036854775808.0 in
         let upper_bound_as_int =
           (* interpreted as signed integer, upper bound wraps around to become
@@ -904,15 +911,16 @@ let convertSymbol name = function
       AssemblySymbols.addVar name (convertVarType t) true
   | { Symbols.symType = t } -> AssemblySymbols.addVar name (convertVarType t) false
 
-let gen (Tacky.Program top_levels) =
+let gen counter (Tacky.Program top_levels) =
   (* clear the hashtable (necessary if we're compiling multiple source) *)
   constants.Clear()
+  _counter <- counter
   let tls = List.map convertTopLevel top_levels
   let constants_list =
     constants
     |> Seq.map convertConstant
     |> List.ofSeq
-  
+
   let prog = Assembly.Program (constants_list @ tls)
   let _ = Symbols.iter convertSymbol
-  prog
+  (_counter, prog)

@@ -1,8 +1,9 @@
-﻿module Compile
+module Compile
 
 let compile (config: Settings.CompilerConfig) (stage: Settings.Stage) (optimizations: Settings.Optimizations) (src_file: string) =
     // read in the file - TODO use streams?
     let source = System.IO.File.ReadAllText(src_file)
+    let counter = UniqueIds.initialCounter
     // Lex it
     let tokens = Lexer.lex source
     if stage = Settings.Lex then ()
@@ -13,18 +14,21 @@ let compile (config: Settings.CompilerConfig) (stage: Settings.Stage) (optimizat
         else
             // Semantic analysis has three steps:
             // 1. resolve identifiers
-            let resolved_ast = Resolve.resolve ast
+            let counter', resolved_ast = Resolve.resolve counter ast
             // 2. annotate loops and break/continue statements
-            let annotated_ast = Label_loops.labelLoops resolved_ast
+            let counter'', annotated_ast = Label_loops.labelLoops counter' resolved_ast
             // 3. typecheck definitions and uses of functions and variables
+            // Sync shared counter before typecheck (it uses Symbols.addString which uses the shared counter)
+            UniqueIds.sharedCounter <- counter''
             let typed_ast = Typecheck.typecheck annotated_ast
+            let counter_after_typecheck = UniqueIds.sharedCounter
             if stage = Settings.Validate then ()
             else
                 // Convert the AST to TACKY
-                let tacky = TackyGen.gen typed_ast
+                let counter''', tacky = TackyGen.gen counter_after_typecheck typed_ast
                 // print to file (src filename with .debug.tacky extension) if debug is
                 // enabled
-                Tacky_print.debugPrintTacky config.Debug src_file tacky
+                let counter'''' = Tacky_print.debugPrintTacky config.Debug counter''' src_file tacky
                 // optimize it!
                 let optimized_tacky = Optimize.optimize optimizations src_file tacky
                 if stage = Settings.Tacky then ()
@@ -34,7 +38,10 @@ let compile (config: Settings.CompilerConfig) (stage: Settings.Stage) (optimizat
                     let aliased_vars = Address_taken.analyzeProgram optimized_tacky
                     // Assembly generation has three steps:
                     // 1. convert TACKY to assembly
-                    let asm_ast = Codegen.gen optimized_tacky
+                    let _counter5, asm_ast = Codegen.gen counter'''' optimized_tacky
+                    // Sync shared counters for modules that still use them (e.g. Cfg.printGraphviz)
+                    UniqueIds.sharedCounter <- _counter5
+                    Cfg.setCounter _counter5
                     // print pre-pseudoreg-allocation assembly if debug enabled
                     if config.Debug then
                         let prealloc_filename =

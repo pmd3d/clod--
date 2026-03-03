@@ -210,11 +210,17 @@ let initializeAnnotation cfg dummyVal =
 let stripAnnotations cfg = initializeAnnotation cfg ()
 
 (* debugging *)
+let mutable private _counter : UniqueIds.Counter = 0
+
+let setCounter c = _counter <- c
+let getCounter () = _counter
+
 let printGraphviz (ppInstr: System.IO.TextWriter -> 'instr -> unit)
                    (ppVal: System.IO.TextWriter -> 'v -> unit)
                    (cfg: ControlFlowGraph<'v, 'instr>) =
-    let filename =
-        UniqueIds.makeLabel cfg.debugLabel + ".dot"
+    let c, lbl = UniqueIds.makeLabel cfg.debugLabel _counter
+    _counter <- c
+    let filename = lbl + ".dot"
     let path =
         if System.IO.Path.IsPathRooted(filename) then filename
         else System.IO.Path.Combine(System.IO.Directory.GetCurrentDirectory(), filename)

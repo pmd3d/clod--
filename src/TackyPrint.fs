@@ -213,11 +213,13 @@ let ppProgram (escape_brackets: bool) (out: System.IO.TextWriter) (Program tls) 
     out.WriteLine()
     out.Flush()
 
-let debugPrintTacky (debug: bool) (src_filename: string) tacky_prog =
+let debugPrintTacky (debug: bool) (counter: UniqueIds.Counter) (src_filename: string) tacky_prog =
     if debug then
-        let tacky_file =
-            UniqueIds.makeLabel (System.IO.Path.GetFileNameWithoutExtension(src_filename))
-            + ".debug.tacky"
+        let counter', lbl = UniqueIds.makeLabel (System.IO.Path.GetFileNameWithoutExtension(src_filename)) counter
+        let tacky_file = lbl + ".debug.tacky"
         let chan = new System.IO.StreamWriter(tacky_file)
         ppProgram false (chan :> System.IO.TextWriter) tacky_prog
         chan.Close()
+        counter'
+    else
+        counter

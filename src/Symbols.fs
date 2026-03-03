@@ -36,8 +36,15 @@ let getOpt name =
     | true, v -> Some v
     | false, _ -> None
 
+let addStringWithCounter (counter: UniqueIds.Counter) (s: string) =
+    let counter', str_id = UniqueIds.makeNamedTemporary "string" counter
+    let t = Types.Array (Types.Char, int64 (String.length s + 1))
+    symbolTable.[str_id] <-
+        { symType = t; attrs = ConstAttr (Initializers.StringInit (s, true)) }
+    (counter', str_id)
+
 let addString (s: string) =
-    let str_id = UniqueIds.makeNamedTemporary "string"
+    let str_id = UniqueIds.makeNamedTemporaryShared "string"
     let t = Types.Array (Types.Char, int64 (String.length s + 1))
     symbolTable.[str_id] <-
         { symType = t; attrs = ConstAttr (Initializers.StringInit (s, true)) }

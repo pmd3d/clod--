@@ -1,4 +1,4 @@
-﻿module Resolve
+module Resolve
 
 open Ast.Untyped
 open Types
@@ -19,12 +19,6 @@ let copyStructMap m =
     Map.map
         (fun _ entry -> { entry with struct_from_current_scope = false })
         m
-
-// F#'s List.mapFold has different tuple order than OCaml's List.fold_left_map
-let foldLeftMap f acc lst =
-    let results, finalAcc =
-        List.mapFold (fun state x -> let s', r = f state x in (r, s')) acc lst
-    (finalAcc, results)
 
 (* replace structure tags in type specifiers *)
 let rec resolveType struct_map = function
@@ -86,35 +80,35 @@ let rec resolveExp struct_map id_map = function
 let resolveOptionalExp struct_map id_map =
     Option.map (resolveExp struct_map id_map)
 
-let resolveLocalVarHelper id_map name storage_class =
+let resolveLocalVarHelper counter id_map name storage_class =
     (match Map.tryFind name id_map with
      | Some { from_current_scope = true; has_linkage = has_linkage } ->
          if not (has_linkage && storage_class = Some Ast.StorageClass.Extern) then
              failwith "Duplicate variable declaration"
          else ()
      | _ -> ())
-    let entry =
+    let counter', entry =
         if storage_class = Some Ast.StorageClass.Extern then
-            { unique_name = name; from_current_scope = true; has_linkage = true }
+            (counter, { unique_name = name; from_current_scope = true; has_linkage = true })
         else
-            let unique_name = UniqueIds.makeNamedTemporary name
-            { unique_name = unique_name; from_current_scope = true; has_linkage = false }
+            let counter', unique_name = UniqueIds.makeNamedTemporary name counter
+            (counter', { unique_name = unique_name; from_current_scope = true; has_linkage = false })
     let new_map = Map.add name entry id_map
-    (new_map, entry.unique_name)
+    (counter', new_map, entry.unique_name)
 
 let rec resolveInitializer struct_map id_map = function
     | Initializer.SingleInit e -> Initializer.SingleInit (resolveExp struct_map id_map e)
     | Initializer.CompoundInit inits ->
         Initializer.CompoundInit (List.map (resolveInitializer struct_map id_map) inits)
 
-let resolveLocalVarDeclaration struct_map id_map
+let resolveLocalVarDeclaration counter struct_map id_map
         { name = name; varType = var_type; init = init; storageClass = storage_class } =
-    let new_id_map, unique_name =
-        resolveLocalVarHelper id_map name storage_class
+    let counter', new_id_map, unique_name =
+        resolveLocalVarHelper counter id_map name storage_class
     let resolved_type = resolveType struct_map var_type
     let resolved_init =
         Option.map (resolveInitializer struct_map new_id_map) init
-    ( new_id_map,
+    ( counter', new_id_map,
       {
           name = unique_name
           varType = resolved_type
@@ -122,87 +116,104 @@ let resolveLocalVarDeclaration struct_map id_map
           storageClass = storage_class
       } )
 
-let resolveForInit struct_map id_map = function
-    | InitExp e -> (id_map, InitExp (resolveOptionalExp struct_map id_map e))
+let resolveForInit counter struct_map id_map = function
+    | InitExp e -> (counter, id_map, InitExp (resolveOptionalExp struct_map id_map e))
     | InitDecl d ->
-        let new_id_map, resolved_decl =
-            resolveLocalVarDeclaration struct_map id_map d
-        (new_id_map, InitDecl resolved_decl)
+        let counter', new_id_map, resolved_decl =
+            resolveLocalVarDeclaration counter struct_map id_map d
+        (counter', new_id_map, InitDecl resolved_decl)
 
-let rec resolveStatement struct_map id_map = function
+let rec resolveStatement counter struct_map id_map = function
     | Return e ->
         let resolved_e = Option.map (resolveExp struct_map id_map) e
-        Return resolved_e
-    | Expression e -> Expression (resolveExp struct_map id_map e)
+        (counter, Return resolved_e)
+    | Expression e -> (counter, Expression (resolveExp struct_map id_map e))
     | Statement.If (condition, then_clause, else_clause) ->
-        Statement.If
+        let counter', then' = resolveStatement counter struct_map id_map then_clause
+        let counter'', else' =
+            match else_clause with
+            | Some e ->
+                let c, e' = resolveStatement counter' struct_map id_map e
+                (c, Some e')
+            | None -> (counter', None)
+        (counter'',
+         Statement.If
             (resolveExp struct_map id_map condition,
-             resolveStatement struct_map id_map then_clause,
-             Option.map (resolveStatement struct_map id_map) else_clause)
+             then',
+             else'))
     | While (condition, body, id) ->
-        While
+        let counter', body' = resolveStatement counter struct_map id_map body
+        (counter',
+         While
             (resolveExp struct_map id_map condition,
-             resolveStatement struct_map id_map body,
-             id)
+             body',
+             id))
     | DoWhile (body, condition, id) ->
-        DoWhile
-            (resolveStatement struct_map id_map body,
+        let counter', body' = resolveStatement counter struct_map id_map body
+        (counter',
+         DoWhile
+            (body',
              resolveExp struct_map id_map condition,
-             id)
+             id))
     | For (init, condition, post, body, id) ->
         let id_map1 = copyIdentifierMap id_map
         let struct_map1 = copyStructMap struct_map
-        let id_map2, resolved_init = resolveForInit struct_map1 id_map1 init
-        For
+        let counter', id_map2, resolved_init = resolveForInit counter struct_map1 id_map1 init
+        let counter'', body' = resolveStatement counter' struct_map1 id_map2 body
+        (counter'',
+         For
             (resolved_init,
              resolveOptionalExp struct_map1 id_map2 condition,
              resolveOptionalExp struct_map1 id_map2 post,
-             resolveStatement struct_map1 id_map2 body,
-             id)
+             body',
+             id))
     | Compound block ->
         let new_variable_map = copyIdentifierMap id_map
         let new_struct_map = copyStructMap struct_map
-        Compound (resolveBlock new_struct_map new_variable_map block)
-    | (Null | Break _ | Continue _) as s -> s
+        let counter', block' = resolveBlock counter new_struct_map new_variable_map block
+        (counter', Compound block')
+    | (Null | Break _ | Continue _) as s -> (counter, s)
 
-and resolveBlockItem (struct_map, id_map) = function
+and resolveBlockItem counter (struct_map, id_map) = function
     | Stmt s ->
-        let resolved_s = resolveStatement struct_map id_map s
-        ((struct_map, id_map), Stmt resolved_s)
+        let counter', resolved_s = resolveStatement counter struct_map id_map s
+        (counter', (struct_map, id_map), Stmt resolved_s)
     | Decl d ->
-        let new_maps, resolved_d =
-            resolveLocalDeclaration struct_map id_map d
-        (new_maps, Decl resolved_d)
+        let counter', new_maps, resolved_d =
+            resolveLocalDeclaration counter struct_map id_map d
+        (counter', new_maps, Decl resolved_d)
 
-and resolveBlock struct_map id_map (Block items) =
-    let _final_maps, resolved_items =
-        foldLeftMap resolveBlockItem (struct_map, id_map) items
-    Block resolved_items
+and resolveBlock counter struct_map id_map (Block items) =
+    let counter', _final_maps, resolved_items =
+        List.fold (fun (c, maps, acc) item ->
+            let c', maps', item' = resolveBlockItem c maps item
+            (c', maps', acc @ [item'])) (counter, (struct_map, id_map), []) items
+    (counter', Block resolved_items)
 
-and resolveLocalDeclaration struct_map id_map = function
+and resolveLocalDeclaration counter struct_map id_map = function
     | VarDecl vd ->
-        let new_id_map, resolved_vd =
-            resolveLocalVarDeclaration struct_map id_map vd
-        ((struct_map, new_id_map), VarDecl resolved_vd)
+        let counter', new_id_map, resolved_vd =
+            resolveLocalVarDeclaration counter struct_map id_map vd
+        (counter', (struct_map, new_id_map), VarDecl resolved_vd)
     | FunDecl { body = Some _ } ->
         failwith "nested function definitions are not allowed"
     | FunDecl { storageClass = Some Ast.StorageClass.Static } ->
         failwith "static keyword not allowed on local function declarations"
     | FunDecl fd ->
-        let new_id_map, resolved_fd =
-            resolveFunctionDeclaration struct_map id_map fd
-        ((struct_map, new_id_map), FunDecl resolved_fd)
+        let counter', new_id_map, resolved_fd =
+            resolveFunctionDeclaration counter struct_map id_map fd
+        (counter', (struct_map, new_id_map), FunDecl resolved_fd)
     | StructDecl sd ->
-        let new_struct_map, resolved_sd =
-            resolveStructureDeclaration struct_map sd
-        ((new_struct_map, id_map), StructDecl resolved_sd)
+        let counter', new_struct_map, resolved_sd =
+            resolveStructureDeclaration counter struct_map sd
+        (counter', (new_struct_map, id_map), StructDecl resolved_sd)
 
-and resolveParams id_map =
-    let fold_param new_map param_name =
-        resolveLocalVarHelper new_map param_name None
-    foldLeftMap fold_param id_map
+and resolveParams counter id_map param_names =
+    List.fold (fun (c, m, acc) param_name ->
+        let c', m', unique = resolveLocalVarHelper c m param_name None
+        (c', m', acc @ [unique])) (counter, id_map, []) param_names
 
-and resolveFunctionDeclaration struct_map id_map fn =
+and resolveFunctionDeclaration counter struct_map id_map fn =
     match Map.tryFind fn.name id_map with
     | Some { from_current_scope = true; has_linkage = false } ->
         failwith "Duplicate declaration"
@@ -212,12 +223,16 @@ and resolveFunctionDeclaration struct_map id_map fn =
             { unique_name = fn.name; from_current_scope = true; has_linkage = true }
         let new_id_map = Map.add fn.name new_entry id_map
         let inner_id_map = copyIdentifierMap new_id_map
-        let inner_id_map1, resolved_params =
-            resolveParams inner_id_map fn.``params``
+        let counter', inner_id_map1, resolved_params =
+            resolveParams counter inner_id_map fn.``params``
         let inner_struct_map = copyStructMap struct_map
-        let resolved_body =
-            Option.map (resolveBlock inner_struct_map inner_id_map1) fn.body
-        ( new_id_map,
+        let counter'', resolved_body =
+            match fn.body with
+            | Some body ->
+                let c, b = resolveBlock counter' inner_struct_map inner_id_map1 body
+                (c, Some b)
+            | None -> (counter', None)
+        ( counter'', new_id_map,
           {
               fn with
                   funType = resolved_type
@@ -225,20 +240,20 @@ and resolveFunctionDeclaration struct_map id_map fn =
                   body = resolved_body
           } )
 
-and resolveStructureDeclaration struct_map { tag = tag; members = members } =
+and resolveStructureDeclaration counter struct_map { tag = tag; members = members } =
     let prev_entry = Map.tryFind tag struct_map
-    let new_map, resolved_tag =
+    let counter', new_map, resolved_tag =
         match prev_entry with
         | Some { unique_tag = unique_tag; struct_from_current_scope = true } ->
-            (struct_map, unique_tag)
+            (counter, struct_map, unique_tag)
         | _ ->
-            let unique_tag = UniqueIds.makeNamedTemporary tag
+            let counter', unique_tag = UniqueIds.makeNamedTemporary tag counter
             let entry = { unique_tag = unique_tag; struct_from_current_scope = true }
-            (Map.add tag entry struct_map, unique_tag)
+            (counter', Map.add tag entry struct_map, unique_tag)
     let resolveMember m =
         { m with memberType = resolveType new_map m.memberType }
     let resolved_members = List.map resolveMember members
-    (new_map, { tag = resolved_tag; members = resolved_members })
+    (counter', new_map, { tag = resolved_tag; members = resolved_members })
 
 let resolveFileScopeVariableDeclaration struct_map id_map
         ({ name = name; varType = var_type } as vd: VariableDeclaration) =
@@ -249,22 +264,22 @@ let resolveFileScopeVariableDeclaration struct_map id_map
             id_map
     (new_map, resolved_vd)
 
-let resolveGlobalDeclaration (struct_map, id_map) = function
+let resolveGlobalDeclaration counter (struct_map, id_map) = function
     | FunDecl fd ->
-        let id_map1, fd = resolveFunctionDeclaration struct_map id_map fd
-        ((struct_map, id_map1), FunDecl fd)
+        let counter', id_map1, fd = resolveFunctionDeclaration counter struct_map id_map fd
+        (counter', (struct_map, id_map1), FunDecl fd)
     | VarDecl vd ->
         let id_map1, resolved_vd =
             resolveFileScopeVariableDeclaration struct_map id_map vd
-        ((struct_map, id_map1), VarDecl resolved_vd)
+        (counter, (struct_map, id_map1), VarDecl resolved_vd)
     | StructDecl sd ->
-        let struct_map1, resolved_sd =
-            resolveStructureDeclaration struct_map sd
-        ((struct_map1, id_map), StructDecl resolved_sd)
+        let counter', struct_map1, resolved_sd =
+            resolveStructureDeclaration counter struct_map sd
+        (counter', (struct_map1, id_map), StructDecl resolved_sd)
 
-let resolve (Program decls) =
-    let _, resolved_decls =
-        foldLeftMap resolveGlobalDeclaration
-            (Map.empty, Map.empty)
-            decls
-    Program resolved_decls
+let resolve counter (Program decls) =
+    let counter', _, resolved_decls =
+        List.fold (fun (c, maps, acc) d ->
+            let c', maps', d' = resolveGlobalDeclaration c maps d
+            (c', maps', acc @ [d'])) (counter, (Map.empty, Map.empty), []) decls
+    (counter', Program resolved_decls)
