@@ -2,6 +2,8 @@ module Compile
 
 exception private LexError of string
 exception private ParseError of string
+exception private ResolveError of string
+exception private LoopLabelError of string
 
 let private compileInner (config: Settings.CompilerConfig) (stage: Settings.Stage) (optimizations: Settings.Optimizations) (src_file: string) (source: string) =
     let counter = UniqueIds.initialCounter
@@ -21,9 +23,15 @@ let private compileInner (config: Settings.CompilerConfig) (stage: Settings.Stag
         else
             // Semantic analysis has three steps:
             // 1. resolve identifiers
-            let counter', resolved_ast = Resolve.resolve counter ast
+            let counter', resolved_ast =
+                match Resolve.resolve counter ast with
+                | Ok r -> r
+                | Error msg -> raise (ResolveError msg)
             // 2. annotate loops and break/continue statements
-            let counter'', annotated_ast = Label_loops.labelLoops counter' resolved_ast
+            let counter'', annotated_ast =
+                match Label_loops.labelLoops counter' resolved_ast with
+                | Ok r -> r
+                | Error msg -> raise (LoopLabelError msg)
             // 3. typecheck definitions and uses of functions and variables
             // Sync shared counter before typecheck (it uses Symbols.addString which uses the shared counter)
             UniqueIds.sharedCounter <- counter''
@@ -74,5 +82,7 @@ let compile (config: Settings.CompilerConfig) (stage: Settings.Stage) (optimizat
     with
     | LexError msg -> Error (CompilerError.LexError msg)
     | ParseError msg -> Error (CompilerError.ParseError msg)
+    | ResolveError msg -> Error (CompilerError.ResolveError msg)
+    | LoopLabelError msg -> Error (CompilerError.LoopLabelError msg)
     | Failure msg when not (msg.StartsWith("Internal error")) ->
         Error (CompilerError.TypeError msg)

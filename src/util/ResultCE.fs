@@ -16,3 +16,18 @@ type ResultBuilder() =
     member _.Run(f) = f ()
 
 let result = ResultBuilder()
+
+let resultTraverse f items =
+    List.foldBack (fun item acc ->
+        match acc with
+        | Error e -> Error e
+        | Ok xs ->
+            match f item with
+            | Ok x -> Ok (x :: xs)
+            | Error e -> Error e) items (Ok [])
+
+let resultFold f state items =
+    List.fold (fun acc item ->
+        match acc with
+        | Error e -> Error e
+        | Ok s -> f s item) (Ok state) items
