@@ -40,7 +40,8 @@ let preprocess (src: string) =
     output
 
 let compile (config: Settings.CompilerConfig) (stage: Settings.Stage) (optimizations: Settings.Optimizations) (preprocessedSrc: string) =
-    match Compile.compile config stage optimizations preprocessedSrc with
+    let source = System.IO.File.ReadAllText(preprocessedSrc)
+    match Compile.compile config stage optimizations preprocessedSrc source with
     | Ok () ->
         (* remove preprocessed src *)
         runCommand "rm" [ preprocessedSrc ]

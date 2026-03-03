@@ -1,8 +1,6 @@
 module Compile
 
-let private compileInner (config: Settings.CompilerConfig) (stage: Settings.Stage) (optimizations: Settings.Optimizations) (src_file: string) =
-    // read in the file - TODO use streams?
-    let source = System.IO.File.ReadAllText(src_file)
+let private compileInner (config: Settings.CompilerConfig) (stage: Settings.Stage) (optimizations: Settings.Optimizations) (src_file: string) (source: string) =
     let counter = UniqueIds.initialCounter
     // Lex it
     let tokens = Lexer.lex source
@@ -61,9 +59,9 @@ let private compileInner (config: Settings.CompilerConfig) (stage: Settings.Stag
                         let asm_filename = System.IO.Path.ChangeExtension(src_file, ".s")
                         Emit.emit config.Platform asm_filename asm_ast3
 
-let compile (config: Settings.CompilerConfig) (stage: Settings.Stage) (optimizations: Settings.Optimizations) (src_file: string) : Result<unit, CompilerError.CompilerError> =
+let compile (config: Settings.CompilerConfig) (stage: Settings.Stage) (optimizations: Settings.Optimizations) (src_file: string) (source: string) : Result<unit, CompilerError.CompilerError> =
     try
-        Ok (compileInner config stage optimizations src_file)
+        Ok (compileInner config stage optimizations src_file source)
     with
     | Lexer.LexError msg -> Error (CompilerError.LexError msg)
     | Parse.ParseError msg -> Error (CompilerError.ParseError msg)

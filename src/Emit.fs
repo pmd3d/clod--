@@ -176,7 +176,7 @@ let showCondCode = function
     | B -> "b"
     | BE -> "be"
 
-let emitInstruction platform (chan: System.IO.StreamWriter) = function
+let emitInstruction platform (chan: System.IO.TextWriter) = function
     | Mov(t, src, dst) ->
         chan.Write(
             sprintf "\tmov%s %s, %s\n" (suffix t) (showOperand platform t src)
@@ -268,7 +268,7 @@ let emitInstruction platform (chan: System.IO.StreamWriter) = function
         failwith
             "Internal error: can't apply cdq to a byte or non-integer type"
 
-let emitGlobalDirective (chan: System.IO.StreamWriter) ``global`` label =
+let emitGlobalDirective (chan: System.IO.TextWriter) ``global`` label =
     if ``global`` then chan.Write(sprintf "\t.globl %s\n" label)
 
 let escape s =
@@ -281,7 +281,7 @@ let escape s =
     String.concat ""
         (s |> Seq.map escapeChar |> Seq.toList)
 
-let emitInit platform (chan: System.IO.StreamWriter) = function
+let emitInit platform (chan: System.IO.TextWriter) = function
     | Initializers.IntInit i ->
         chan.Write(sprintf "\t.long %s\n" (string i))
     | Initializers.LongInit l ->
@@ -309,7 +309,7 @@ let emitInit platform (chan: System.IO.StreamWriter) = function
     | Initializers.PointerInit lbl ->
         chan.Write(sprintf "\t.quad %s\n" (showLocalLabel platform lbl))
 
-let emitConstant platform (chan: System.IO.StreamWriter) name alignment init =
+let emitConstant platform (chan: System.IO.TextWriter) name alignment init =
     let constantSectionName =
         match (platform, init) with
         | Settings.Linux, _ -> ".section .rodata"
@@ -329,7 +329,7 @@ let emitConstant platform (chan: System.IO.StreamWriter) name alignment init =
     if constantSectionName = ".literal16" then
         emitInit platform chan (Initializers.LongInit 0L)
 
-let emitTl platform (chan: System.IO.StreamWriter) = function
+let emitTl platform (chan: System.IO.TextWriter) = function
     | Function { name = name; ``global`` = isGlobal;
                  instructions = instructions } ->
         let label = showLabel platform name
@@ -358,14 +358,18 @@ let emitTl platform (chan: System.IO.StreamWriter) = function
     | StaticConstant { name = name; alignment = alignment; init = init } ->
         emitConstant platform chan name alignment init
 
-let emitStackNote platform (chan: System.IO.StreamWriter) =
+let emitStackNote platform (chan: System.IO.TextWriter) =
     match platform with
     | Settings.OS_X -> ()
     | Settings.Linux ->
         chan.Write("\t.section .note.GNU-stack,\"\",@progbits\n")
 
-let emit platform assembly_file (Program tls) =
-    use outputChannel = new System.IO.StreamWriter(assembly_file : string)
-    List.iter (emitTl platform outputChannel) tls
-    emitStackNote platform outputChannel
-    outputChannel.Flush()
+let emitToString platform (Program tls) =
+    use sw = new System.IO.StringWriter()
+    List.iter (emitTl platform sw) tls
+    emitStackNote platform sw
+    sw.ToString()
+
+let emit platform assembly_file program =
+    let content = emitToString platform program
+    System.IO.File.WriteAllText(assembly_file, content)
