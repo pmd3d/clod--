@@ -27,6 +27,8 @@
     <Compile Include="Symbols.fs" />
     <Compile Include="Tacky.fs" />
     <Compile Include="Cfg.fs" />
+    <Compile Include="TackyCfg.fs" />
+    <Compile Include="AsmCfg.fs" />
     <Compile Include="BackwardDataflow.fs" />
     <Compile Include="Bytes.fs" />
     <Compile Include="ConstConvert.fs" />

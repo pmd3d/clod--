@@ -2,9 +2,6 @@
 
 open Assembly
 
-// Bind AsmCfg
-module AsmCfg = Cfg.AsmCfg
-
 // Operand module mostly for type definition compat
 module Operand =
     type OperandType = AsmOperand

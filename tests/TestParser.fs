@@ -13,17 +13,17 @@ let ``signed long constant`` () =
     let resultString = 
         [ Tokens.ConstLong 4611686018427387904I ]
         |> TokStream.ofList
-        |> Parse.Private.parseConst 
-        |> printConst 
+        |> Parse.parseConst
+        |> printConst
 
     Assert.Equal("ConstLong 4611686018427387904L", resultString)
 
 [<Fact>]
 let ``unsigned int constant`` () =
-    let resultString = 
+    let resultString =
         [ Tokens.ConstUInt 4294967291I ]
-        |> TokStream.ofList 
-        |> Parse.Private.parseConst
+        |> TokStream.ofList
+        |> Parse.parseConst
         |> printConst
 
     Assert.Equal("ConstUInt 4294967291u", resultString)
@@ -33,7 +33,7 @@ let ``unsigned long constant`` () =
     let resultString =
         [ Tokens.ConstULong 18446744073709551611I ]
         |> TokStream.ofList
-        |> Parse.Private.parseConst
+        |> Parse.parseConst
         |> printConst
 
     Assert.Equal("ConstULong 18446744073709551611UL", resultString)
@@ -43,16 +43,16 @@ let ``expression`` () =
     let result =
         [ Tokens.ConstInt 100; Tokens.Semicolon ]
         |> TokStream.ofList
-        |> Parse.Private.parseExp 40
-        
+        |> Parse.parseExp 40
+
     Assert.Equal(Ast.UntypedExp.Constant (Const.ConstInt 100), result)
 
 [<Fact>]
 let ``statement`` () =
-    let result = 
+    let result =
         [ Tokens.KWReturn; Tokens.ConstInt 4; Tokens.Semicolon ]
         |> TokStream.ofList
-        |> Parse.Private.parseStatement
+        |> Parse.parseStatement
     Assert.Equal(Ast.Untyped.Return (Some (Ast.UntypedExp.Constant (Const.ConstInt 4))), result)
 
 [<Fact>]
