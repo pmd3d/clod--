@@ -59,7 +59,10 @@ let analyze (pp_var: System.IO.TextWriter -> 'var -> unit)
                                 if List.exists (fun (k, _) -> k = n) wklist then wklist
                                 else
                                     let blocks = get_basic_blocks updatedCfg
-                                    let blk = List.find (fun (k, _) -> k = n) blocks |> snd
+                                    let blk =
+                                        match List.tryFind (fun (k, _) -> k = n) blocks with
+                                        | Some (_, b) -> b
+                                        | None -> failwith "Internal error: block not found in CFG"
                                     (n, blk) :: wklist)
                         rest (get_preds block')
             processWorklist updatedCfg newWorklist

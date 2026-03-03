@@ -1,13 +1,29 @@
 ﻿module ListUtil
+    let tryMax cmp l =
+        match l with
+        | [] -> None
+        | _ -> l |> List.sortWith cmp |> List.rev |> Some |> Option.map List.head
+
     let max cmp l =
-        l |> List.sortWith cmp |> List.rev |> List.head
+        tryMax cmp l |> Option.get
+
+    let tryMin cmp l =
+        match l with
+        | [] -> None
+        | _ -> l |> List.sortWith cmp |> Some |> Option.map List.head
 
     let min cmp l =
-        l |> List.sortWith cmp |> List.head
+        tryMin cmp l |> Option.get
 
     let makeList len v = List.init len (fun _ -> v)
 
-    let last l = l |> List.rev |> List.head
+    let tryLast l =
+        match l with
+        | [] -> None
+        | _ -> l |> List.rev |> List.head |> Some
+
+    let last l =
+        tryLast l |> Option.get
 
     let rec take n l =
         match l with

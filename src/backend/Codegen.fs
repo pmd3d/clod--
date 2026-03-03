@@ -160,7 +160,10 @@ let classifyNewStructure tag =
       | t -> [ t ]
     
     let scalar_types = f (Types.Structure tag)
-    let first, last = (List.head scalar_types, List.last scalar_types)
+    let first, last =
+        match scalar_types with
+        | [] -> failwith "Internal error: empty scalar types for structure"
+        | _ -> (List.head scalar_types, ListUtil.last scalar_types)
     if size > 8 then
       let first_class = if first = Types.Double then SSE else Integer
       let last_class = if last = Types.Double then SSE else Integer
@@ -196,10 +199,12 @@ let classifyParamsHelper typed_asm_vals return_on_stack =
         let var_size = int (TypeUtils.getSize tacky_t)
         let classes = classifyStructure s
         let updated_int, updated_dbl, use_stack =
-          if List.head classes = Mem then
+          match classes with
+          | [] -> failwith "Internal error: empty classification for structure"
+          | first :: _ when first = Mem ->
             (* all eightbytes go on the stack*)
             (int_reg_args, dbl_reg_args, true)
-          else
+          | _ ->
             (* tentative assign eigthbytes to registers *)
             let process_one_eightbyte (i, tentative_ints, tentative_dbls) cls =
               let operand = Assembly.PseudoMem (var_name, i * 8)
@@ -286,8 +291,10 @@ let classifyReturnHelper ret_type asm_retval =
             failwith
               "Internal error: invalid assembly operand for structure type"
       in
-      if List.head classes = Mem then ([], [], true)
-      else
+      match classes with
+      | [] -> failwith "Internal error: empty classification for structure"
+      | first :: _ when first = Mem -> ([], [], true)
+      | _ ->
         (* return in registers, can move everything w/ quadword operands *)
         let process_quadword (i, ints, dbls) cls =
           let operand = Assembly.PseudoMem (var_name, i * 8) in

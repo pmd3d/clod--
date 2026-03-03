@@ -62,25 +62,25 @@ type ControlFlowGraph<'v, 'instr> = {
     debugLabel: string
 }
 
+let private findBlock n blocks =
+    match List.tryFind (fun (k, _) -> k = n) blocks with
+    | Some (_, blk) -> blk
+    | None -> failwith "Internal error: block not found in CFG"
+
 let getSuccs ndId cfg =
     match ndId with
     | Entry -> cfg.entrySuccs
-    | Block n ->
-        let nd = List.find (fun (k, _) -> k = n) cfg.BasicBlocks |> snd
-        nd.succs
+    | Block n -> (findBlock n cfg.BasicBlocks).succs
     | Exit -> []
 
 let getBlockValue blocknum cfg =
-    let nd =
-        List.find (fun (k, _) -> k = blocknum) cfg.BasicBlocks |> snd
-    nd.value
+    (findBlock blocknum cfg.BasicBlocks).value
 
 let private updateSuccessors f ndId g =
     match ndId with
     | Entry -> g.entrySuccs <- f g.entrySuccs
     | Block n ->
-        let blk =
-            List.find (fun (k, _) -> k = n) g.BasicBlocks |> snd
+        let blk = findBlock n g.BasicBlocks
         blk.succs <- f blk.succs
     | Exit -> failwith "Internal error: malformed CFG"
 
@@ -88,8 +88,7 @@ let private updatePredecessors f ndId g =
     match ndId with
     | Entry -> failwith "Internal error: malformed CFG"
     | Block n ->
-        let blk =
-            List.find (fun (k, _) -> k = n) g.BasicBlocks |> snd
+        let blk = findBlock n g.BasicBlocks
         blk.preds <- f blk.preds
     | Exit -> g.exitPreds <- f g.exitPreds
 

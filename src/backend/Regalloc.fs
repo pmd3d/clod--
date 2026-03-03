@@ -492,8 +492,9 @@ type Allocator(R : RegTypeOps) =
                 in
                 let isLowDegree nd = degree nd < k in
                 let nextNode =
-                    try List.find isLowDegree remaining
-                    with :? System.Collections.Generic.KeyNotFoundException ->
+                    match List.tryFind isLowDegree remaining with
+                    | Some nd -> nd
+                    | None ->
                         let spillMetric nd = nd.spillCost / float (degree nd) in
                         let cmp nd1 nd2 =
                             compare (spillMetric nd1) (spillMetric nd2)
