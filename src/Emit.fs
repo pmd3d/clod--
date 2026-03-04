@@ -1,15 +1,21 @@
 module Emit
 
 open Assembly
+open ResultCE
+
+let result = ResultBuilder()
+
+let resultIter f items = resultTraverse f items |> Result.map ignore
 
 let suffix = function
-    | Byte -> "b"
-    | Longword -> "l"
-    | Quadword -> "q"
-    | Double -> "sd"
+    | Byte -> Ok "b"
+    | Longword -> Ok "l"
+    | Quadword -> Ok "q"
+    | Double -> Ok "sd"
     | ByteArray _ ->
-        failwith
-            "Internal error: found instruction w/ non-scalar operand type"
+        Error
+            (CompilerError.InternalError
+                "found instruction w/ non-scalar operand type")
 
 let alignDirective platform =
     match platform with
@@ -26,96 +32,104 @@ let showLocalLabel platform label =
     | Settings.OS_X -> "L" + label
     | Settings.Linux -> ".L" + label
 
-let showFunName platform f =
+let showFunName platform asmSymbols f =
     match platform with
-    | Settings.OS_X -> "_" + f
+    | Settings.OS_X -> Ok ("_" + f)
     | Settings.Linux ->
-        if AssemblySymbols.isDefined f then f else f + "@PLT"
+        result {
+            let! defined = AssemblySymbols.isDefined f asmSymbols
+            return if defined then f else f + "@PLT"
+        }
 
 let showLongReg = function
-    | AX -> "%eax"
-    | BX -> "%ebx"
-    | CX -> "%ecx"
-    | DX -> "%edx"
-    | DI -> "%edi"
-    | SI -> "%esi"
-    | R8 -> "%r8d"
-    | R9 -> "%r9d"
-    | R10 -> "%r10d"
-    | R11 -> "%r11d"
-    | R12 -> "%r12d"
-    | R13 -> "%r13d"
-    | R14 -> "%r14d"
-    | R15 -> "%r15d"
-    | SP -> failwith "Internal error: no 32-bit RSP"
-    | BP -> failwith "Internal error: no 32-bit RBP"
+    | AX -> Ok "%eax"
+    | BX -> Ok "%ebx"
+    | CX -> Ok "%ecx"
+    | DX -> Ok "%edx"
+    | DI -> Ok "%edi"
+    | SI -> Ok "%esi"
+    | R8 -> Ok "%r8d"
+    | R9 -> Ok "%r9d"
+    | R10 -> Ok "%r10d"
+    | R11 -> Ok "%r11d"
+    | R12 -> Ok "%r12d"
+    | R13 -> Ok "%r13d"
+    | R14 -> Ok "%r14d"
+    | R15 -> Ok "%r15d"
+    | SP -> Error (CompilerError.InternalError "no 32-bit RSP")
+    | BP -> Error (CompilerError.InternalError "no 32-bit RBP")
     | _ ->
-        failwith
-            "Internal error: can't store longword type in XMM register"
+        Error
+            (CompilerError.InternalError
+                "can't store longword type in XMM register")
 
 let showQuadwordReg = function
-    | AX -> "%rax"
-    | BX -> "%rbx"
-    | CX -> "%rcx"
-    | DX -> "%rdx"
-    | DI -> "%rdi"
-    | SI -> "%rsi"
-    | R8 -> "%r8"
-    | R9 -> "%r9"
-    | R10 -> "%r10"
-    | R11 -> "%r11"
-    | R12 -> "%r12"
-    | R13 -> "%r13"
-    | R14 -> "%r14"
-    | R15 -> "%r15"
-    | SP -> "%rsp"
-    | BP -> "%rbp"
+    | AX -> Ok "%rax"
+    | BX -> Ok "%rbx"
+    | CX -> Ok "%rcx"
+    | DX -> Ok "%rdx"
+    | DI -> Ok "%rdi"
+    | SI -> Ok "%rsi"
+    | R8 -> Ok "%r8"
+    | R9 -> Ok "%r9"
+    | R10 -> Ok "%r10"
+    | R11 -> Ok "%r11"
+    | R12 -> Ok "%r12"
+    | R13 -> Ok "%r13"
+    | R14 -> Ok "%r14"
+    | R15 -> Ok "%r15"
+    | SP -> Ok "%rsp"
+    | BP -> Ok "%rbp"
     | _ ->
-        failwith
-            "Internal error: can't store quadword type in XMM register"
+        Error
+            (CompilerError.InternalError
+                "can't store quadword type in XMM register")
 
 let showDoubleReg = function
-    | XMM0 -> "%xmm0"
-    | XMM1 -> "%xmm1"
-    | XMM2 -> "%xmm2"
-    | XMM3 -> "%xmm3"
-    | XMM4 -> "%xmm4"
-    | XMM5 -> "%xmm5"
-    | XMM6 -> "%xmm6"
-    | XMM7 -> "%xmm7"
-    | XMM8 -> "%xmm8"
-    | XMM9 -> "%xmm9"
-    | XMM10 -> "%xmm10"
-    | XMM11 -> "%xmm11"
-    | XMM12 -> "%xmm12"
-    | XMM13 -> "%xmm13"
-    | XMM14 -> "%xmm14"
-    | XMM15 -> "%xmm15"
+    | XMM0 -> Ok "%xmm0"
+    | XMM1 -> Ok "%xmm1"
+    | XMM2 -> Ok "%xmm2"
+    | XMM3 -> Ok "%xmm3"
+    | XMM4 -> Ok "%xmm4"
+    | XMM5 -> Ok "%xmm5"
+    | XMM6 -> Ok "%xmm6"
+    | XMM7 -> Ok "%xmm7"
+    | XMM8 -> Ok "%xmm8"
+    | XMM9 -> Ok "%xmm9"
+    | XMM10 -> Ok "%xmm10"
+    | XMM11 -> Ok "%xmm11"
+    | XMM12 -> Ok "%xmm12"
+    | XMM13 -> Ok "%xmm13"
+    | XMM14 -> Ok "%xmm14"
+    | XMM15 -> Ok "%xmm15"
     | _ ->
-        failwith
-            "Internal error: can't store double type in general-purpose register"
+        Error
+            (CompilerError.InternalError
+                "can't store double type in general-purpose register")
 
 let showByteReg = function
-    | AX -> "%al"
-    | BX -> "%bl"
-    | CX -> "%cl"
-    | DX -> "%dl"
-    | DI -> "%dil"
-    | SI -> "%sil"
-    | R8 -> "%r8b"
-    | R9 -> "%r9b"
-    | R10 -> "%r10b"
-    | R11 -> "%r11b"
-    | R12 -> "%r12b"
-    | R13 -> "%r13b"
-    | R14 -> "%r14b"
-    | R15 -> "%r15b"
-    | SP -> failwith "Internal error: no one-byte RSP"
-    | BP -> failwith "Internal error: no one-byte RBP"
+    | AX -> Ok "%al"
+    | BX -> Ok "%bl"
+    | CX -> Ok "%cl"
+    | DX -> Ok "%dl"
+    | DI -> Ok "%dil"
+    | SI -> Ok "%sil"
+    | R8 -> Ok "%r8b"
+    | R9 -> Ok "%r9b"
+    | R10 -> Ok "%r10b"
+    | R11 -> Ok "%r11b"
+    | R12 -> Ok "%r12b"
+    | R13 -> Ok "%r13b"
+    | R14 -> Ok "%r14b"
+    | R15 -> Ok "%r15b"
+    | SP -> Error (CompilerError.InternalError "no one-byte RSP")
+    | BP -> Error (CompilerError.InternalError "no one-byte RBP")
     | _ ->
-        failwith "Internal error: can't store byte type in XMM register"
+        Error
+            (CompilerError.InternalError
+                "can't store byte type in XMM register")
 
-let showOperand platform t = function
+let showOperand platform asmSymbols t = function
     | Reg r ->
         (match t with
         | Byte -> showByteReg r
@@ -123,28 +137,43 @@ let showOperand platform t = function
         | Quadword -> showQuadwordReg r
         | Double -> showDoubleReg r
         | ByteArray _ ->
-            failwith
-                "Internal error: can't store non-scalar operand in register")
-    | Imm i -> sprintf "$%s" (string i)
-    | Memory(r, 0) -> sprintf "(%s)" (showQuadwordReg r)
-    | Memory(r, i) -> sprintf "%d(%s)" i (showQuadwordReg r)
+            Error
+                (CompilerError.InternalError
+                    "can't store non-scalar operand in register"))
+    | Imm i -> Ok (sprintf "$%s" (string i))
+    | Memory(r, 0) ->
+        result {
+            let! rStr = showQuadwordReg r
+            return sprintf "(%s)" rStr
+        }
+    | Memory(r, i) ->
+        result {
+            let! rStr = showQuadwordReg r
+            return sprintf "%d(%s)" i rStr
+        }
     | Data(name, offset) ->
-        let lbl =
-            if AssemblySymbols.isConstant name then
-                showLocalLabel platform name
-            else showLabel platform name
-        if offset = 0 then sprintf "%s(%%rip)" lbl
-        else sprintf "%s+%d(%%rip)" lbl offset
-    | Indexed { ``base`` = b; index = index; scale = scale } ->
-        sprintf "(%s, %s, %d)" (showQuadwordReg b)
-            (showQuadwordReg index) scale
+        result {
+            let! isConst = AssemblySymbols.isConstant name asmSymbols
+            let lbl =
+                if isConst then
+                    showLocalLabel platform name
+                else showLabel platform name
+            if offset = 0 then return sprintf "%s(%%rip)" lbl
+            else return sprintf "%s+%d(%%rip)" lbl offset
+        }
+    | Indexed { baseReg = b; index = index; scale = scale } ->
+        result {
+            let! bStr = showQuadwordReg b
+            let! indexStr = showQuadwordReg index
+            return sprintf "(%s, %s, %d)" bStr indexStr scale
+        }
     (* printing out pseudoregisters is only for debugging *)
-    | Pseudo name -> sprintf "%%%s" name
-    | PseudoMem(name, offset) -> sprintf "%d(%%%s)" offset name
+    | Pseudo name -> Ok (sprintf "%%%s" name)
+    | PseudoMem(name, offset) -> Ok (sprintf "%d(%%%s)" offset name)
 
-let showByteOperand platform = function
+let showByteOperand platform asmSymbols = function
     | Reg r -> showByteReg r
-    | other -> showOperand platform Longword other
+    | other -> showOperand platform asmSymbols Longword other
 
 let showUnaryInstruction = function
     | Neg -> "neg"
@@ -152,17 +181,18 @@ let showUnaryInstruction = function
     | Shr -> "shr"
 
 let showBinaryInstruction = function
-    | Add -> "add"
-    | Sub -> "sub"
-    | Mult -> "imul"
-    | DivDouble -> "div"
-    | And -> "and"
-    | Or -> "or"
-    | Shl -> "shl"
-    | ShrBinop -> "shr"
+    | Add -> Ok "add"
+    | Sub -> Ok "sub"
+    | Mult -> Ok "imul"
+    | DivDouble -> Ok "div"
+    | And -> Ok "and"
+    | Or -> Ok "or"
+    | Shl -> Ok "shl"
+    | ShrBinop -> Ok "shr"
     | Xor ->
-        failwith
-            "Internal error, should handle xor as special case"
+        Error
+            (CompilerError.InternalError
+                "should handle xor as special case")
 
 let showCondCode = function
     | E -> "e"
@@ -176,100 +206,158 @@ let showCondCode = function
     | B -> "b"
     | BE -> "be"
 
-let emitInstruction platform (chan: System.IO.TextWriter) = function
+let emitInstruction platform asmSymbols (chan: System.IO.TextWriter) = function
     | Mov(t, src, dst) ->
-        chan.Write(
-            sprintf "\tmov%s %s, %s\n" (suffix t) (showOperand platform t src)
-                (showOperand platform t dst))
+        result {
+            let! sfx = suffix t
+            let! srcStr = showOperand platform asmSymbols t src
+            let! dstStr = showOperand platform asmSymbols t dst
+            chan.Write(sprintf "\tmov%s %s, %s\n" sfx srcStr dstStr)
+        }
     | Unary(operator, t, dst) ->
-        chan.Write(
-            sprintf "\t%s%s %s\n"
-                (showUnaryInstruction operator)
-                (suffix t) (showOperand platform t dst))
+        result {
+            let! sfx = suffix t
+            let! dstStr = showOperand platform asmSymbols t dst
+            chan.Write(
+                sprintf "\t%s%s %s\n"
+                    (showUnaryInstruction operator)
+                    sfx dstStr)
+        }
     | Binary { op = Xor; t = Double; src = src; dst = dst } ->
-        chan.Write(
-            sprintf "\txorpd %s, %s\n" (showOperand platform Double src)
-                (showOperand platform Double dst))
+        result {
+            let! srcStr = showOperand platform asmSymbols Double src
+            let! dstStr = showOperand platform asmSymbols Double dst
+            chan.Write(sprintf "\txorpd %s, %s\n" srcStr dstStr)
+        }
     | Binary { op = Mult; t = Double; src = src; dst = dst } ->
-        chan.Write(
-            sprintf "\tmulsd %s, %s\n" (showOperand platform Double src)
-                (showOperand platform Double dst))
+        result {
+            let! srcStr = showOperand platform asmSymbols Double src
+            let! dstStr = showOperand platform asmSymbols Double dst
+            chan.Write(sprintf "\tmulsd %s, %s\n" srcStr dstStr)
+        }
     | Binary { op = op; t = t; src = src; dst = dst } ->
-        chan.Write(
-            sprintf "\t%s%s %s, %s\n"
-                (showBinaryInstruction op)
-                (suffix t) (showOperand platform t src) (showOperand platform t dst))
+        result {
+            let! opStr = showBinaryInstruction op
+            let! sfx = suffix t
+            let! srcStr = showOperand platform asmSymbols t src
+            let! dstStr = showOperand platform asmSymbols t dst
+            chan.Write(sprintf "\t%s%s %s, %s\n" opStr sfx srcStr dstStr)
+        }
     | Cmp(Double, src, dst) ->
-        chan.Write(
-            sprintf "\tcomisd %s, %s\n" (showOperand platform Double src)
-                (showOperand platform Double dst))
+        result {
+            let! srcStr = showOperand platform asmSymbols Double src
+            let! dstStr = showOperand platform asmSymbols Double dst
+            chan.Write(sprintf "\tcomisd %s, %s\n" srcStr dstStr)
+        }
     | Cmp(t, src, dst) ->
-        chan.Write(
-            sprintf "\tcmp%s %s, %s\n" (suffix t) (showOperand platform t src)
-                (showOperand platform t dst))
+        result {
+            let! sfx = suffix t
+            let! srcStr = showOperand platform asmSymbols t src
+            let! dstStr = showOperand platform asmSymbols t dst
+            chan.Write(sprintf "\tcmp%s %s, %s\n" sfx srcStr dstStr)
+        }
     | Idiv(t, operand) ->
-        chan.Write(
-            sprintf "\tidiv%s %s\n" (suffix t) (showOperand platform t operand))
+        result {
+            let! sfx = suffix t
+            let! opStr = showOperand platform asmSymbols t operand
+            chan.Write(sprintf "\tidiv%s %s\n" sfx opStr)
+        }
     | Div(t, operand) ->
-        chan.Write(
-            sprintf "\tdiv%s %s\n" (suffix t) (showOperand platform t operand))
+        result {
+            let! sfx = suffix t
+            let! opStr = showOperand platform asmSymbols t operand
+            chan.Write(sprintf "\tdiv%s %s\n" sfx opStr)
+        }
     | Lea(src, dst) ->
-        chan.Write(
-            sprintf "\tleaq %s, %s\n"
-                (showOperand platform Quadword src)
-                (showOperand platform Quadword dst))
-    | Cdq Longword -> chan.Write("\tcdq\n")
-    | Cdq Quadword -> chan.Write("\tcqo\n")
+        result {
+            let! srcStr = showOperand platform asmSymbols Quadword src
+            let! dstStr = showOperand platform asmSymbols Quadword dst
+            chan.Write(sprintf "\tleaq %s, %s\n" srcStr dstStr)
+        }
+    | Cdq Longword ->
+        chan.Write("\tcdq\n")
+        Ok ()
+    | Cdq Quadword ->
+        chan.Write("\tcqo\n")
+        Ok ()
     | Jmp lbl ->
         chan.Write(sprintf "\tjmp %s\n" (showLocalLabel platform lbl))
+        Ok ()
     | JmpCC(code, lbl) ->
         chan.Write(
             sprintf "\tj%s %s\n" (showCondCode code)
                 (showLocalLabel platform lbl))
+        Ok ()
     | SetCC(code, operand) ->
-        chan.Write(
-            sprintf "\tset%s %s\n" (showCondCode code)
-                (showByteOperand platform operand))
+        result {
+            let! opStr = showByteOperand platform asmSymbols operand
+            chan.Write(sprintf "\tset%s %s\n" (showCondCode code) opStr)
+        }
     | Label lbl ->
         chan.Write(sprintf "%s:\n" (showLocalLabel platform lbl))
+        Ok ()
     | Push op ->
-        chan.Write(
-            sprintf "\tpushq %s\n" (showOperand platform Quadword op))
+        result {
+            let! opStr = showOperand platform asmSymbols Quadword op
+            chan.Write(sprintf "\tpushq %s\n" opStr)
+        }
     | Pop r ->
-        chan.Write(sprintf "\tpopq %s\n" (showQuadwordReg r))
+        result {
+            let! rStr = showQuadwordReg r
+            chan.Write(sprintf "\tpopq %s\n" rStr)
+        }
     | Call f ->
-        chan.Write(sprintf "\tcall %s\n" (showFunName platform f))
+        result {
+            let! fName = showFunName platform asmSymbols f
+            chan.Write(sprintf "\tcall %s\n" fName)
+        }
     | Movsx { src_type = src_type; dst_type = dst_type; src = src;
               dst = dst } ->
-        chan.Write(
-            sprintf "\tmovs%s%s %s, %s\n" (suffix src_type)
-                (suffix dst_type)
-                (showOperand platform src_type src)
-                (showOperand platform dst_type dst))
+        result {
+            let! srcSfx = suffix src_type
+            let! dstSfx = suffix dst_type
+            let! srcStr = showOperand platform asmSymbols src_type src
+            let! dstStr = showOperand platform asmSymbols dst_type dst
+            chan.Write(
+                sprintf "\tmovs%s%s %s, %s\n" srcSfx dstSfx srcStr dstStr)
+        }
     | MovZeroExtend { src_type = src_type; dst_type = dst_type;
                       src = src; dst = dst } ->
-        chan.Write(
-            sprintf "\tmovz%s%s %s, %s\n" (suffix src_type)
-                (suffix dst_type)
-                (showOperand platform src_type src)
-                (showOperand platform dst_type dst))
+        result {
+            let! srcSfx = suffix src_type
+            let! dstSfx = suffix dst_type
+            let! srcStr = showOperand platform asmSymbols src_type src
+            let! dstStr = showOperand platform asmSymbols dst_type dst
+            chan.Write(
+                sprintf "\tmovz%s%s %s, %s\n" srcSfx dstSfx srcStr dstStr)
+        }
     | Cvtsi2sd(t, src, dst) ->
-        chan.Write(
-            sprintf "\tcvtsi2sd%s %s, %s\n" (suffix t)
-                (showOperand platform t src) (showOperand platform Double dst))
+        result {
+            let! sfx = suffix t
+            let! srcStr = showOperand platform asmSymbols t src
+            let! dstStr = showOperand platform asmSymbols Double dst
+            chan.Write(
+                sprintf "\tcvtsi2sd%s %s, %s\n" sfx srcStr dstStr)
+        }
     | Cvttsd2si(t, src, dst) ->
-        chan.Write(
-            sprintf "\tcvttsd2si%s %s, %s\n" (suffix t)
-                (showOperand platform Double src) (showOperand platform t dst))
+        result {
+            let! sfx = suffix t
+            let! srcStr = showOperand platform asmSymbols Double src
+            let! dstStr = showOperand platform asmSymbols t dst
+            chan.Write(
+                sprintf "\tcvttsd2si%s %s, %s\n" sfx srcStr dstStr)
+        }
     | Ret ->
         chan.Write(
             "\n\tmovq %rbp, %rsp\n\tpopq %rbp\n\tret\n")
+        Ok ()
     | Cdq(Double | Byte | ByteArray _) ->
-        failwith
-            "Internal error: can't apply cdq to a byte or non-integer type"
+        Error
+            (CompilerError.InternalError
+                "can't apply cdq to a byte or non-integer type")
 
-let emitGlobalDirective (chan: System.IO.TextWriter) ``global`` label =
-    if ``global`` then chan.Write(sprintf "\t.globl %s\n" label)
+let emitGlobalDirective (chan: System.IO.TextWriter) isGlobal label =
+    if isGlobal then chan.Write(sprintf "\t.globl %s\n" label)
 
 let escape s =
     let escapeChar c =
@@ -312,33 +400,37 @@ let emitInit platform (chan: System.IO.TextWriter) = function
 let emitConstant platform (chan: System.IO.TextWriter) name alignment init =
     let constantSectionName =
         match (platform, init) with
-        | Settings.Linux, _ -> ".section .rodata"
-        | Settings.OS_X, Initializers.StringInit _ -> ".cstring"
+        | Settings.Linux, _ -> Ok ".section .rodata"
+        | Settings.OS_X, Initializers.StringInit _ -> Ok ".cstring"
         | Settings.OS_X, _ ->
-            if alignment = 8 then ".literal8"
-            else if alignment = 16 then ".literal16"
+            if alignment = 8 then Ok ".literal8"
+            else if alignment = 16 then Ok ".literal16"
             else
-                failwith
-                    "Internal error: found constant with bad alignment"
-    chan.Write(
-        sprintf "\n\t%s\n\t%s %d\n  %s:\n"
-            constantSectionName (alignDirective platform) alignment
-            (showLocalLabel platform name))
-    emitInit platform chan init
-    (* macOS linker gets cranky if you write only 8 bytes to .literal16 section *)
-    if constantSectionName = ".literal16" then
-        emitInit platform chan (Initializers.LongInit 0L)
+                Error
+                    (CompilerError.InternalError
+                        "found constant with bad alignment")
+    result {
+        let! sectionName = constantSectionName
+        chan.Write(
+            sprintf "\n\t%s\n\t%s %d\n  %s:\n"
+                sectionName (alignDirective platform) alignment
+                (showLocalLabel platform name))
+        emitInit platform chan init
+        (* macOS linker gets cranky if you write only 8 bytes to .literal16 section *)
+        if sectionName = ".literal16" then
+            emitInit platform chan (Initializers.LongInit 0L)
+    }
 
-let emitTl platform (chan: System.IO.TextWriter) = function
-    | Function { name = name; ``global`` = isGlobal;
+let emitTl platform asmSymbols (chan: System.IO.TextWriter) = function
+    | Function { name = name; isGlobal = isGlobal;
                  instructions = instructions } ->
         let label = showLabel platform name
         emitGlobalDirective chan isGlobal label
         chan.Write(
             sprintf "\n\t.text\n%s:\n\tpushq %%rbp\n\tmovq %%rsp, %%rbp\n"
                 label)
-        List.iter (emitInstruction platform chan) instructions
-    | StaticVariable { name = name; ``global`` = isGlobal; init = init;
+        resultIter (emitInstruction platform asmSymbols chan) instructions
+    | StaticVariable { name = name; isGlobal = isGlobal; init = init;
                        alignment = alignment }
         when List.forall Initializers.isZero init ->
         let label = showLabel platform name
@@ -347,7 +439,8 @@ let emitTl platform (chan: System.IO.TextWriter) = function
             sprintf "\n\t.bss\n\t%s %d\n%s:\n"
                 (alignDirective platform) alignment label)
         List.iter (emitInit platform chan) init
-    | StaticVariable { name = name; ``global`` = isGlobal; init = init;
+        Ok ()
+    | StaticVariable { name = name; isGlobal = isGlobal; init = init;
                        alignment = alignment } ->
         let label = showLabel platform name
         emitGlobalDirective chan isGlobal label
@@ -355,6 +448,7 @@ let emitTl platform (chan: System.IO.TextWriter) = function
             sprintf "\n\t.data\n\t%s %d\n%s:\n"
                 (alignDirective platform) alignment label)
         List.iter (emitInit platform chan) init
+        Ok ()
     | StaticConstant { name = name; alignment = alignment; init = init } ->
         emitConstant platform chan name alignment init
 
@@ -364,12 +458,10 @@ let emitStackNote platform (chan: System.IO.TextWriter) =
     | Settings.Linux ->
         chan.Write("\t.section .note.GNU-stack,\"\",@progbits\n")
 
-let emitToString platform (Program tls) =
+let emitToString platform asmSymbols (Program tls) =
     use sw = new System.IO.StringWriter()
-    List.iter (emitTl platform sw) tls
-    emitStackNote platform sw
-    sw.ToString()
-
-let emit platform assembly_file program =
-    let content = emitToString platform program
-    System.IO.File.WriteAllText(assembly_file, content)
+    result {
+        do! resultIter (emitTl platform asmSymbols sw) tls
+        emitStackNote platform sw
+        return sw.ToString()
+    }

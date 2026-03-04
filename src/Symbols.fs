@@ -1,12 +1,12 @@
-﻿module Symbols
+module Symbols
 
 type InitialValue =
     | Tentative
     | Initial of Initializers.StaticInit list
     | NoInitializer
 
-type FunAttr = { defined: bool; ``global``: bool }
-type StaticAttr = { init: InitialValue; ``global``: bool }
+type FunAttr = { defined: bool; isGlobal: bool }
+type StaticAttr = { init: InitialValue; isGlobal: bool }
 
 type IdentifierAttrs =
     | FunAttr of FunAttr
@@ -16,46 +16,40 @@ type IdentifierAttrs =
 
 type SymbolEntry = { symType: Types.CType; attrs: IdentifierAttrs }
 
-let mutable private _symbolTable: Map<string, SymbolEntry> = Map.empty
+type SymbolTableMap = Map<string, SymbolEntry>
+
+let empty : SymbolTableMap = Map.empty
 
 // always use replace instead of add; we want to remove old binding when we add a new one
 
-let addAutomaticVar name (t: Types.CType) =
-    _symbolTable <- Map.add name { symType = t; attrs = LocalAttr } _symbolTable
+let addAutomaticVar name (t: Types.CType) (st: SymbolTableMap) : SymbolTableMap =
+    Map.add name { symType = t; attrs = LocalAttr } st
 
-let addStaticVar name (t: Types.CType) (``global``: bool) (init: InitialValue) =
-    _symbolTable <- Map.add name { symType = t; attrs = StaticAttr { init = init; ``global`` = ``global`` } } _symbolTable
+let addStaticVar name (t: Types.CType) (isGlobal: bool) (init: InitialValue) (st: SymbolTableMap) : SymbolTableMap =
+    Map.add name { symType = t; attrs = StaticAttr { init = init; isGlobal = isGlobal } } st
 
-let addFun name (t: Types.CType) (``global``: bool) (defined: bool) =
-    _symbolTable <- Map.add name { symType = t; attrs = FunAttr { ``global`` = ``global``; defined = defined } } _symbolTable
+let addFun name (t: Types.CType) (isGlobal: bool) (defined: bool) (st: SymbolTableMap) : SymbolTableMap =
+    Map.add name { symType = t; attrs = FunAttr { isGlobal = isGlobal; defined = defined } } st
 
-let get name = Map.find name _symbolTable
+let get name (st: SymbolTableMap) =
+    match Map.tryFind name st with
+    | Some v -> Ok v
+    | None -> Error (CompilerError.InternalError ("symbol not found: " + name))
 
-let getOpt name = Map.tryFind name _symbolTable
+let getOpt name (st: SymbolTableMap) = Map.tryFind name st
 
-let addStringWithCounter (counter: UniqueIds.Counter) (s: string) =
+let addStringWithCounter (counter: UniqueIds.Counter) (s: string) (st: SymbolTableMap) =
     let counter', str_id = UniqueIds.makeNamedTemporary "string" counter
     let t = Types.Array (Types.Char, int64 (String.length s + 1))
-    _symbolTable <- Map.add str_id { symType = t; attrs = ConstAttr (Initializers.StringInit (s, true)) } _symbolTable
-    (counter', str_id)
+    let st' = Map.add str_id { symType = t; attrs = ConstAttr (Initializers.StringInit (s, true)) } st
+    (counter', str_id, st')
 
-let addString (s: string) =
-    let str_id = UniqueIds.makeNamedTemporaryShared "string"
-    let t = Types.Array (Types.Char, int64 (String.length s + 1))
-    _symbolTable <- Map.add str_id { symType = t; attrs = ConstAttr (Initializers.StringInit (s, true)) } _symbolTable
-    str_id
+let isGlobal name (st: SymbolTableMap) =
+    get name st
+    |> Result.map (fun entry ->
+        match entry.attrs with
+        | LocalAttr | ConstAttr _ -> false
+        | StaticAttr { isGlobal = g } -> g
+        | FunAttr { isGlobal = g } -> g)
 
-let isGlobal name =
-    match (get name).attrs with
-    | LocalAttr | ConstAttr _ -> false
-    | StaticAttr { ``global`` = g } -> g
-    | FunAttr { ``global`` = g } -> g
-
-let bindings () = Map.toList _symbolTable
-
-let iter f =
-    _symbolTable |> Map.iter f
-
-// Snapshot/restore for pipeline threading
-let getTable () = _symbolTable
-let setTable m = _symbolTable <- m
+let bindings (st: SymbolTableMap) = Map.toList st

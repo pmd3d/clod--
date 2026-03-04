@@ -31,11 +31,11 @@ let showTackyVal = function Constant c -> Const.show c | Var v -> v
 let ppTackyVal (fmt: System.IO.TextWriter) v = fmt.Write(showTackyVal v)
 
 // TODO maybe this should be in a separate module?
-let typeOfVal = function
+let typeOfVal st = function
     // note: this reports the type of ConstChar as SChar instead of Char, doesn't
     // matter in this context
-    | Constant c -> Const.typeOfConst c
-    | Var v -> (Symbols.get v).symType
+    | Constant c -> Ok (Const.typeOfConst c)
+    | Var v -> Symbols.get v st |> Result.map (fun entry -> entry.symType)
 
 type TackySrcDst = { src: TackyVal; dst: TackyVal }
 
@@ -61,6 +61,9 @@ type TackyCopyFromOffsetInfo = { src: string; offset: int; dst: TackyVal }
 
 type TackyFunCallInfo = { f: string; args: TackyVal list; dst: TackyVal option }
 
+type TackyLoadInfo = { src_ptr: TackyVal; dst: TackyVal }
+type TackyStoreInfo = { src: TackyVal; dst_ptr: TackyVal }
+
 type TackyInstruction =
     | Return of TackyVal option
     | SignExtend of TackySrcDst
@@ -74,8 +77,8 @@ type TackyInstruction =
     | Binary of TackyBinaryInfo
     | Copy of TackySrcDst
     | GetAddress of TackySrcDst
-    | Load of {| src_ptr: TackyVal; dst: TackyVal |}
-    | Store of {| src: TackyVal; dst_ptr: TackyVal |}
+    | Load of TackyLoadInfo
+    | Store of TackyStoreInfo
     | AddPtr of TackyAddPtrInfo
     | CopyToOffset of TackyCopyToOffsetInfo
     | CopyFromOffset of TackyCopyFromOffsetInfo
@@ -87,15 +90,15 @@ type TackyInstruction =
 
 type TackyFunctionDef = {
     name: string
-    ``global``: bool
-    ``params``: string list
+    isGlobal: bool
+    paramList: string list
     body: TackyInstruction list
 }
 
 type TackyStaticVariableDef = {
     name: string
     t: Types.CType
-    ``global``: bool
+    isGlobal: bool
     init: Initializers.StaticInit list
 }
 

@@ -492,13 +492,13 @@ and private parsePostfixExp (tokens: TokStream.TokStream) =
                     return! postfixLoop subscriptExp tokens
                 | Some T.Dot ->
                     let! _, tokens = takeToken tokens
-                    let! ``member``, tokens = parseId tokens
-                    let dotExp = Ast.Exp.Dot(e, ``member``)
+                    let! memberName, tokens = parseId tokens
+                    let dotExp = Ast.Exp.Dot(e, memberName)
                     return! postfixLoop dotExp tokens
                 | Some T.Arrow ->
                     let! _, tokens = takeToken tokens
-                    let! ``member``, tokens = parseId tokens
-                    let arrowExp = Ast.Exp.Arrow(e, ``member``)
+                    let! memberName, tokens = parseId tokens
+                    let arrowExp = Ast.Exp.Arrow(e, memberName)
                     return! postfixLoop arrowExp tokens
                 | _ -> return (e, tokens)
             }
@@ -635,8 +635,8 @@ and private parseDirectDeclarator (tokens: TokStream.TokStream) =
         let! simpleDec, tokens = parseSimpleDeclarator tokens
         match peekOpt tokens with
         | Some T.OpenParen ->
-            let! ``params``, tokens = parseParamList tokens
-            return (FunDeclarator(``params``, simpleDec), tokens)
+            let! paramList, tokens = parseParamList tokens
+            return (FunDeclarator(paramList, simpleDec), tokens)
         | Some T.OpenBracket -> return! parseArrayDeclSuffix simpleDec tokens
         | _ -> return (simpleDec, tokens)
     }
@@ -664,9 +664,9 @@ and private parseParamList (tokens: TokStream.TokStream) =
                     else
                         return ([ nextParam ], tokens)
                 }
-            let! ``params``, tokens = paramLoop tokens
+            let! paramList, tokens = paramLoop tokens
             let! tokens = expect T.CloseParen tokens
-            return (``params``, tokens)
+            return (paramList, tokens)
     }
 
 and private parseParam (tokens: TokStream.TokStream) =
@@ -699,7 +699,7 @@ let rec private processDeclarator decl baseType =
         | ArrayDeclarator(inner, size) ->
             let derivedType = Types.Array(baseType, size)
             return! processDeclarator inner derivedType
-        | FunDeclarator(``params``, Ident s) ->
+        | FunDeclarator(paramList, Ident s) ->
             let processParam (Param(pBaseType, pDecl)) =
                 result {
                     let! paramName, paramT, _ = processDeclarator pDecl pBaseType
@@ -712,7 +712,7 @@ let rec private processDeclarator decl baseType =
                     return (paramName, paramT)
                 }
             let! processedParams =
-                ``params``
+                paramList
                 |> List.fold (fun acc p ->
                     result {
                         let! accList = acc
@@ -807,7 +807,7 @@ let rec private parseFunctionOrVariableDeclaration (tokens: TokStream.TokStream)
         let! specifiers, tokens = parseSpecifierList tokens
         let! baseType, storageClass = parseTypeAndStorageClass specifiers
         let! decl, tokens = parseDeclarator tokens
-        let! name, typ, ``params`` = processDeclarator decl baseType
+        let! name, typ, paramList = processDeclarator decl baseType
         match typ with
         | Types.FunType _ ->
             let! body, tokens =
@@ -826,7 +826,7 @@ let rec private parseFunctionOrVariableDeclaration (tokens: TokStream.TokStream)
                 { name = name
                   funType = typ
                   storageClass = storageClass
-                  ``params`` = ``params``
+                  paramList = paramList
                   body = body }, tokens)
         | _ ->
             let! init, tokens =

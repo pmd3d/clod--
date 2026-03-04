@@ -42,8 +42,8 @@ module UntypedExp =
         | Subscript of ptr: Exp * index: Exp
         | SizeOf of Exp
         | SizeOfT of Types.CType
-        | Dot of strct: Exp * ``member``: string
-        | Arrow of strct: Exp * ``member``: string
+        | Dot of strct: Exp * memberName: string
+        | Arrow of strct: Exp * memberName: string
 
     type Initializer =
         | SingleInit of Exp
@@ -68,8 +68,8 @@ module TypedExp =
         | Subscript of ptr: Exp * index: Exp
         | SizeOf of Exp
         | SizeOfT of Types.CType
-        | Dot of strct: Exp * ``member``: string
-        | Arrow of strct: Exp * ``member``: string
+        | Dot of strct: Exp * memberName: string
+        | Arrow of strct: Exp * memberName: string
 
     and Exp = { e: InnerExp; t: Types.CType }
 
@@ -138,7 +138,7 @@ module Untyped =
     and FunctionDeclaration =
         { name: string
           funType: Types.CType
-          ``params``: string list
+          paramList: string list
           body: Block option
           storageClass: StorageClass option }
 
@@ -206,7 +206,7 @@ module Typed =
     and FunctionDeclaration =
         { name: string
           funType: Types.CType
-          ``params``: string list
+          paramList: string list
           body: Block option
           storageClass: StorageClass option }
 

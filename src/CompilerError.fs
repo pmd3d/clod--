@@ -7,6 +7,7 @@ type CompilerError =
     | LoopLabelError of string
     | TypeError of string
     | DriverError of string
+    | InternalError of string
 
 let show = function
     | LexError msg -> "Lex error: " + msg
@@ -15,3 +16,4 @@ let show = function
     | LoopLabelError msg -> "Loop label error: " + msg
     | TypeError msg -> "Type error: " + msg
     | DriverError msg -> "Driver error: " + msg
+    | InternalError msg -> "Internal error: " + msg

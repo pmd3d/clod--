@@ -1,40 +1,38 @@
-﻿module TypeUtils
+module TypeUtils
 
 open Types
 
 let getType (e: Ast.TypedExp.Exp) = e.t
 let setType e newType : Ast.TypedExp.Exp = { e = e; t = newType }
 
-let rec getSize =
+let rec getSize (tt: TypeTable.TypeTableMap) =
     function
-    | Char | SChar | UChar -> 1L
-    | Int | UInt -> 4L
-    | Long | ULong | Double | Pointer _ -> 8L
-    | Array(elemType, size) -> size * getSize elemType
-    | Structure tag -> int64 (TypeTable.find tag).size
+    | Char | SChar | UChar -> Ok 1L
+    | Int | UInt -> Ok 4L
+    | Long | ULong | Double | Pointer _ -> Ok 8L
+    | Array(elemType, size) -> getSize tt elemType |> Result.map (fun s -> size * s)
+    | Structure tag -> TypeTable.find tag tt |> Result.map (fun sd -> int64 sd.size)
     | (FunType _ | Void) as t ->
-        failwith
-            ("Internal error: type doesn't have size: " + show t)
+        Error (CompilerError.InternalError ("type doesn't have size: " + show t))
 
-let rec getAlignment =
+let rec getAlignment (tt: TypeTable.TypeTableMap) =
     function
-    | Char | SChar | UChar -> 1
-    | Int | UInt -> 4
-    | Long | ULong | Double | Pointer _ -> 8
-    | Array(elemType, _) -> getAlignment elemType
-    | Structure tag -> (TypeTable.find tag).alignment
+    | Char | SChar | UChar -> Ok 1
+    | Int | UInt -> Ok 4
+    | Long | ULong | Double | Pointer _ -> Ok 8
+    | Array(elemType, _) -> getAlignment tt elemType
+    | Structure tag -> TypeTable.find tag tt |> Result.map (fun sd -> sd.alignment)
     | (FunType _ | Void) as t ->
-        failwith
-            ("Internal error: type doesn't have alignment: " + show t)
+        Error (CompilerError.InternalError ("type doesn't have alignment: " + show t))
 
 let isSigned =
     function
-    | Int | Long | Char | SChar -> true
-    | UInt | ULong | Pointer _ | UChar -> false
+    | Int | Long | Char | SChar -> Ok true
+    | UInt | ULong | Pointer _ | UChar -> Ok false
     | (Double | FunType _ | Array _ | Void | Structure _) as t ->
-        failwith
-            ("Internal error: signedness doesn't make sense for non-integral type "
-             + show t)
+        Error (CompilerError.InternalError
+            ("signedness doesn't make sense for non-integral type "
+             + show t))
 
 let isPointer = function Pointer _ -> true | _ -> false
 
@@ -57,10 +55,10 @@ let isScalar =
     | Int | UInt | Long | ULong | Char | UChar | SChar | Double | Pointer _ ->
         true
 
-let isComplete =
+let isComplete (tt: TypeTable.TypeTableMap) =
     function
     | Void -> false
-    | Structure tag -> TypeTable.mem tag
+    | Structure tag -> TypeTable.mem tag tt
     | _ -> true
 
-let isCompletePointer = function Pointer t -> isComplete t | _ -> false
+let isCompletePointer tt = function Pointer t -> isComplete tt t | _ -> false

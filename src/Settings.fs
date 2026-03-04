@@ -17,9 +17,6 @@ type CompilerConfig = {
     Debug: bool
 }
 
-let Platform = ref Linux // default to linux
-let Debug = ref false
-
 type Optimizations = {
     constant_folding: bool
     dead_store_elimination: bool

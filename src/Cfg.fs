@@ -64,17 +64,17 @@ type ControlFlowGraph<'v, 'instr> = {
 
 let private findBlock n blocks =
     match List.tryFind (fun (k, _) -> k = n) blocks with
-    | Some (_, blk) -> blk
-    | None -> failwith "Internal error: block not found in CFG"
+    | Some (_, blk) -> Ok blk
+    | None -> Error (CompilerError.InternalError "block not found in CFG")
 
 let getSuccs ndId cfg =
     match ndId with
-    | Entry -> cfg.entrySuccs
-    | Block n -> (findBlock n cfg.BasicBlocks).succs
-    | Exit -> []
+    | Entry -> Ok cfg.entrySuccs
+    | Block n -> findBlock n cfg.BasicBlocks |> Result.map (fun blk -> blk.succs)
+    | Exit -> Ok []
 
 let getBlockValue blocknum cfg =
-    (findBlock blocknum cfg.BasicBlocks).value
+    findBlock blocknum cfg.BasicBlocks |> Result.map (fun blk -> blk.value)
 
 let private updateBlock f blockNum g =
     let newBlocks =
@@ -86,28 +86,30 @@ let private updateBlock f blockNum g =
 
 let private updateSuccessors f ndId g =
     match ndId with
-    | Entry -> { g with entrySuccs = f g.entrySuccs }
-    | Block n -> updateBlock (fun blk -> { blk with succs = f blk.succs }) n g
-    | Exit -> failwith "Internal error: malformed CFG"
+    | Entry -> Ok { g with entrySuccs = f g.entrySuccs }
+    | Block n -> Ok (updateBlock (fun blk -> { blk with succs = f blk.succs }) n g)
+    | Exit -> Error (CompilerError.InternalError "malformed CFG: updateSuccessors on Exit")
 
 let private updatePredecessors f ndId g =
     match ndId with
-    | Entry -> failwith "Internal error: malformed CFG"
-    | Block n -> updateBlock (fun blk -> { blk with preds = f blk.preds }) n g
-    | Exit -> { g with exitPreds = f g.exitPreds }
+    | Entry -> Error (CompilerError.InternalError "malformed CFG: updatePredecessors on Entry")
+    | Block n -> Ok (updateBlock (fun blk -> { blk with preds = f blk.preds }) n g)
+    | Exit -> Ok { g with exitPreds = f g.exitPreds }
 
 let addEdge pred succ g =
     let addId ndId idList =
         if List.contains ndId idList then idList
         else ndId :: idList
-    g |> updateSuccessors (addId succ) pred
-      |> updatePredecessors (addId pred) succ
+    match updateSuccessors (addId succ) pred g with
+    | Ok g' -> updatePredecessors (addId pred) succ g'
+    | Error e -> Error e
 
 let removeEdge pred succ g =
     let removeId ndId idList =
         List.filter (fun i -> i <> ndId) idList
-    g |> updateSuccessors (removeId succ) pred
-      |> updatePredecessors (removeId pred) succ
+    match updateSuccessors (removeId succ) pred g with
+    | Ok g' -> updatePredecessors (removeId pred) succ g'
+    | Error e -> Error e
 
 (* replace block with given block ID *)
 let updateBasicBlock blockIdx newBlock g =
@@ -149,30 +151,41 @@ let private addAllEdges simplify g =
                 | [] -> lblMap)
             Map.empty g.BasicBlocks
 
+    let findLabel target =
+        match Map.tryFind target labelMap with
+        | Some id -> Ok id
+        | None -> Error (CompilerError.InternalError ("label not found in CFG: " + target))
+
     (* add outgoing edges from a single basic block *)
     let processNode g (id_num, block) =
+        match g with
+        | Error e -> Error e
+        | Ok g ->
         let next_block =
             match ListUtil.tryLast g.BasicBlocks with
             | Some (lastIdx, _) when id_num = lastIdx -> Exit
             | _ -> Block(id_num + 1)
-        let _, last_instr =
-            match ListUtil.tryLast block.instructions with
-            | Some x -> x
-            | None -> failwith "Internal error: empty basic block"
-
+        match ListUtil.tryLast block.instructions with
+        | None -> Error (CompilerError.InternalError "empty basic block")
+        | Some (_, last_instr) ->
         match simplify last_instr with
         | Return -> addEdge block.id Exit g
         | UnconditionalJump target ->
-            let target_id = Map.find target labelMap
-            addEdge block.id target_id g
+            match findLabel target with
+            | Ok target_id -> addEdge block.id target_id g
+            | Error e -> Error e
         | ConditionalJump target ->
-            let target_id = Map.find target labelMap
-            g |> addEdge block.id next_block
-              |> addEdge block.id target_id
+            match findLabel target with
+            | Ok target_id ->
+                match addEdge block.id next_block g with
+                | Ok g' -> addEdge block.id target_id g'
+                | Error e -> Error e
+            | Error e -> Error e
         | _ -> addEdge block.id next_block g
 
-    let g = addEdge Entry (Block 0) g
-    List.fold processNode g g.BasicBlocks
+    match addEdge Entry (Block 0) g with
+    | Error e -> Error e
+    | Ok g -> List.fold processNode (Ok g) g.BasicBlocks
 
 let instructionsToCfg simplify debugLabel instructions =
     let toNode idx instructions =
@@ -220,21 +233,12 @@ let initializeAnnotation cfg dummyVal =
 let stripAnnotations cfg = initializeAnnotation cfg ()
 
 (* debugging *)
-let mutable private _counter : UniqueIds.Counter = 0
-
-let setCounter c = _counter <- c
-let getCounter () = _counter
-
-let printGraphviz (ppInstr: System.IO.TextWriter -> 'instr -> unit)
-                   (ppVal: System.IO.TextWriter -> 'v -> unit)
-                   (cfg: ControlFlowGraph<'v, 'instr>) =
-    let c, lbl = UniqueIds.makeLabel cfg.debugLabel _counter
-    _counter <- c
-    let filename = lbl + ".dot"
-    let path =
-        if System.IO.Path.IsPathRooted(filename) then filename
-        else System.IO.Path.Combine(System.IO.Directory.GetCurrentDirectory(), filename)
-    use writer = new System.IO.StreamWriter(path)
+let graphvizToString (ppInstr: System.IO.TextWriter -> 'instr -> unit)
+                      (ppVal: System.IO.TextWriter -> 'v -> unit)
+                      (counter: UniqueIds.Counter)
+                      (cfg: ControlFlowGraph<'v, 'instr>) =
+    let c, lbl = UniqueIds.makeLabel cfg.debugLabel counter
+    use writer = new System.IO.StringWriter()
     let ppNodeId (out: System.IO.TextWriter) = function
         | Exit -> out.Write("exit")
         | Entry -> out.Write("entry")
@@ -282,10 +286,4 @@ let printGraphviz (ppInstr: System.IO.TextWriter -> 'instr -> unit)
     List.iter (fun b -> ppEdges writer b; writer.WriteLine()) cfg.BasicBlocks
     writer.WriteLine("}")
     writer.Flush()
-    writer.Close()
-    let cmd =
-        sprintf "dot -Tpng %s -o %s" filename
-            (System.IO.Path.ChangeExtension(filename, ".png"))
-    let proc = System.Diagnostics.Process.Start("bash", "-c \"" + cmd + "\"")
-    let finished = proc.WaitForExit(30000)
-    if not finished then failwith ("graphviz fail: " + cmd)
+    (c, lbl, writer.ToString())

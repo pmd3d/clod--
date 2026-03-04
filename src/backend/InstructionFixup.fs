@@ -1,6 +1,7 @@
 ﻿module InstructionFixup
 
 open Assembly
+open ResultCE
 
 let int32_max = int64 System.Int32.MaxValue
 let int32_min = int64 System.Int32.MinValue
@@ -221,28 +222,33 @@ let emitStackAdjustment bytes_for_locals callee_saved_count =
     int64 (adjusted_stack_bytes - callee_saved_bytes)
   Binary { op = Sub; t = Quadword; src = Imm stack_adjustment; dst = Reg SP }
 
-let fixupTl = function
-  | Function { name = name; ``global`` = ``global``; instructions = instructions } ->
-      (* TODO bytes_required should be positive (fix this in replace_pseudos) *)
-      let stack_bytes = -AssemblySymbols.getBytesRequired name
-      let callee_saved_regs =
-        AssemblySymbols.getCalleeSavedRegsUsed name |> Set.toList
+let fixupTl asmSymbols = function
+  | Function { name = name; isGlobal = isGlobal; instructions = instructions } ->
+      result {
+          (* TODO bytes_required should be positive (fix this in replace_pseudos) *)
+          let! bytes_req = AssemblySymbols.getBytesRequired name asmSymbols
+          let stack_bytes = -bytes_req
+          let! callee_saved_regs =
+            AssemblySymbols.getCalleeSavedRegsUsed name asmSymbols |> Result.map Set.toList
 
-      let save_reg r = Push (Reg r)
-      let adjust_rsp =
-        emitStackAdjustment stack_bytes (List.length callee_saved_regs)
-      let setup_instructions =
-        adjust_rsp :: List.map save_reg callee_saved_regs
-      Function
-        {
-          name = name;
-          ``global`` = ``global``;
-          instructions =
-            setup_instructions
-            @ List.collect (fixupInstruction callee_saved_regs) instructions;
-        }
-  | static_var -> static_var
+          let save_reg r = Push (Reg r)
+          let adjust_rsp =
+            emitStackAdjustment stack_bytes (List.length callee_saved_regs)
+          let setup_instructions =
+            adjust_rsp :: List.map save_reg callee_saved_regs
+          return Function
+            {
+              name = name;
+              isGlobal = isGlobal;
+              instructions =
+                setup_instructions
+                @ List.collect (fixupInstruction callee_saved_regs) instructions;
+            }
+      }
+  | static_var -> Ok static_var
 
-let fixupProgram (Program tls) =
-  let fixed_functions = List.map fixupTl tls
-  Program fixed_functions
+let fixupProgram asmSymbols (Program tls) =
+  result {
+      let! fixed_functions = resultTraverse (fixupTl asmSymbols) tls
+      return Program fixed_functions
+  }

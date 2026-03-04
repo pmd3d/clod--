@@ -34,7 +34,7 @@ type AsmReg =
     | XMM14
     | XMM15
 
-type AsmIndexedOperand = { ``base``: AsmReg; index: AsmReg; scale: int }
+type AsmIndexedOperand = { baseReg: AsmReg; index: AsmReg; scale: int }
 
 type AsmOperand =
     | Imm of int64
@@ -114,14 +114,14 @@ type AsmInstruction =
 
 type AsmFunctionDef = {
     name: string
-    ``global``: bool
+    isGlobal: bool
     instructions: AsmInstruction list
 }
 
 type AsmStaticVariableDef = {
     name: string
     alignment: int
-    ``global``: bool
+    isGlobal: bool
     init: Initializers.StaticInit list
 }
 

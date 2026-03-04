@@ -39,10 +39,30 @@ let preprocess (src: string) =
     let _ = runCommand "gcc" [ "-E"; "-P"; src; "-o"; output ]
     output
 
+let writeCompileResult (result: Compile.CompileResult) =
+    // Write debug files (tacky, prealloc, postalloc)
+    for (path, content) in result.debugFiles do
+        File.WriteAllText(path, content)
+    // Write graphviz DOT files and generate PNGs
+    for (label, dotContent) in result.graphvizDots do
+        let dotFile = label + ".dot"
+        let pngFile = Path.ChangeExtension(dotFile, ".png")
+        File.WriteAllText(dotFile, dotContent)
+        let cmd = sprintf "dot -Tpng %s -o %s" dotFile pngFile
+        let proc = Process.Start("bash", "-c \"" + cmd + "\"")
+        let finished = proc.WaitForExit(30000)
+        if not finished then
+            eprintfn "Warning: graphviz timed out: %s" cmd
+    // Write assembly file
+    match result.assemblyFile with
+    | Some (path, content) -> File.WriteAllText(path, content)
+    | None -> ()
+
 let compile (config: Settings.CompilerConfig) (stage: Settings.Stage) (optimizations: Settings.Optimizations) (preprocessedSrc: string) =
     let source = System.IO.File.ReadAllText(preprocessedSrc)
     match Compile.compile config stage optimizations preprocessedSrc source with
-    | Ok () ->
+    | Ok result ->
+        writeCompileResult result
         (* remove preprocessed src *)
         runCommand "rm" [ preprocessedSrc ]
         replaceExtension preprocessedSrc ".s"
@@ -65,8 +85,6 @@ let assembleAndLink (link: bool) (cleanup: bool) (libs: string list) (src: strin
     if cleanup then runCommand "rm" [ assemblyFile ]
 
 let driver (target: Settings.Target) (debug: bool) (libs: string list) (stage: Settings.Stage) (optimizations: Settings.Optimizations) (src: string) =
-    Settings.Platform := target
-    Settings.Debug := debug
     let config = { Settings.Platform = target; Settings.Debug = debug }
     let preprocessedName = preprocess src
     let assemblyName = compile config stage optimizations preprocessedName

@@ -177,12 +177,12 @@ let ppInstruction (escape_brackets: bool) (out: System.IO.TextWriter) = function
         ppTackyVal out dst
         write out (sprintf " = %s[offset = %d]" src offset)
 
-let ppFunctionDefinition (escape_brackets: bool) (``global``: bool) (name: string)
-                           (``params``: string list) (out: System.IO.TextWriter)
+let ppFunctionDefinition (escape_brackets: bool) (isGlobal: bool) (name: string)
+                           (paramList: string list) (out: System.IO.TextWriter)
                            (body: TackyInstruction list) =
-    if ``global`` then write out "global "
+    if isGlobal then write out "global "
     write out (sprintf "%s(" name)
-    ppStringList out ``params``
+    ppStringList out paramList
     write out "):"
     out.WriteLine()
     write out "    "
@@ -192,10 +192,10 @@ let ppFunctionDefinition (escape_brackets: bool) (``global``: bool) (name: strin
         out body
 
 let ppTl (escape_brackets: bool) (out: System.IO.TextWriter) = function
-    | Function { name = name; ``global`` = ``global``; ``params`` = ``params``; body = body } ->
-        ppFunctionDefinition escape_brackets ``global`` name ``params`` out body
-    | StaticVariable { ``global`` = ``global``; name = name; init = init; t = t } ->
-        if ``global`` then write out "global "
+    | Function { name = name; isGlobal = isGlobal; paramList = paramList; body = body } ->
+        ppFunctionDefinition escape_brackets isGlobal name paramList out body
+    | StaticVariable { isGlobal = isGlobal; name = name; init = init; t = t } ->
+        if isGlobal then write out "global "
         Types.pp out t
         write out (sprintf " %s = " name)
         ppInitList out init
@@ -217,9 +217,8 @@ let debugPrintTacky (debug: bool) (counter: UniqueIds.Counter) (src_filename: st
     if debug then
         let counter', lbl = UniqueIds.makeLabel (System.IO.Path.GetFileNameWithoutExtension(src_filename)) counter
         let tacky_file = lbl + ".debug.tacky"
-        let chan = new System.IO.StreamWriter(tacky_file)
-        ppProgram false (chan :> System.IO.TextWriter) tacky_prog
-        chan.Close()
-        counter'
+        use sw = new System.IO.StringWriter()
+        ppProgram false (sw :> System.IO.TextWriter) tacky_prog
+        (counter', Some (tacky_file, sw.ToString()))
     else
-        counter
+        (counter, None)

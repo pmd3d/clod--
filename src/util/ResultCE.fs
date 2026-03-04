@@ -18,16 +18,33 @@ type ResultBuilder() =
 let result = ResultBuilder()
 
 let resultTraverse f items =
-    List.foldBack (fun item acc ->
+    List.fold (fun acc item ->
         match acc with
         | Error e -> Error e
         | Ok xs ->
             match f item with
             | Ok x -> Ok (x :: xs)
-            | Error e -> Error e) items (Ok [])
+            | Error e -> Error e) (Ok []) items
+    |> Result.map List.rev
 
 let resultFold f state items =
     List.fold (fun acc item ->
         match acc with
         | Error e -> Error e
         | Ok s -> f s item) (Ok state) items
+
+let resultTraverse2 f xs ys =
+    List.fold2 (fun acc x y ->
+        match acc with
+        | Error e -> Error e
+        | Ok zs ->
+            match f x y with
+            | Ok z -> Ok (z :: zs)
+            | Error e -> Error e) (Ok []) xs ys
+    |> Result.map List.rev
+
+let resultFold2 f state xs ys =
+    List.fold2 (fun acc x y ->
+        match acc with
+        | Error e -> Error e
+        | Ok s -> f s x y) (Ok state) xs ys

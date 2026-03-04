@@ -260,7 +260,7 @@ and resolveFunctionDeclaration counter struct_map id_map fn =
         let new_id_map = Map.add fn.name new_entry id_map
         let inner_id_map = copyIdentifierMap new_id_map
         let! counter', inner_id_map1, resolved_params =
-            resolveParams counter inner_id_map fn.``params``
+            resolveParams counter inner_id_map fn.paramList
         let inner_struct_map = copyStructMap struct_map
         let! counter'', resolved_body =
             match fn.body with
@@ -272,7 +272,7 @@ and resolveFunctionDeclaration counter struct_map id_map fn =
           {
               fn with
                   funType = resolved_type
-                  ``params`` = resolved_params
+                  paramList = resolved_params
                   body = resolved_body
           } )
     }

@@ -29,7 +29,7 @@ let showStaticInit = function
 let ppStaticInit (fmt: System.IO.TextWriter) si =
     fmt.Write(showStaticInit si)
 
-let zero t = [ ZeroInit(int (TypeUtils.getSize t)) ]
+let zero tt t = TypeUtils.getSize tt t |> Result.map (fun size -> [ ZeroInit(int size) ])
 
 let isZero = function
     | CharInit c -> c = 0y

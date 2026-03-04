@@ -1,4 +1,4 @@
-﻿module TypeTable
+module TypeTable
 
 (* structure type definitions *)
 
@@ -10,24 +10,28 @@ type StructDef = {
     members: Map<string, MemberDef>
 }
 
-let mutable private _typeTable: Map<string, StructDef> = Map.empty
+type TypeTableMap = Map<string, StructDef>
 
-let addStructDefinition tag structDef =
-    _typeTable <- Map.add tag structDef _typeTable
+let empty : TypeTableMap = Map.empty
 
-let mem tag = Map.containsKey tag _typeTable
-let find tag = Map.find tag _typeTable
+let addStructDefinition tag structDef (tt: TypeTableMap) : TypeTableMap =
+    Map.add tag structDef tt
 
-let getMembers tag =
-    let structDef = find tag
-    let compareOffset m1 m2 = compare m1.offset m2.offset
-    structDef.members
-    |> Map.toList
-    |> List.map snd
-    |> List.sortWith compareOffset
+let mem tag (tt: TypeTableMap) = Map.containsKey tag tt
+let tryFind tag (tt: TypeTableMap) = Map.tryFind tag tt
+let find tag (tt: TypeTableMap) =
+    match Map.tryFind tag tt with
+    | Some v -> Ok v
+    | None -> Error (CompilerError.InternalError ("type table missing tag " + tag))
 
-let getMemberTypes tag = List.map (fun m -> m.member_type) (getMembers tag)
+let getMembers tag (tt: TypeTableMap) =
+    find tag tt
+    |> Result.map (fun structDef ->
+        let compareOffset m1 m2 = compare m1.offset m2.offset
+        structDef.members
+        |> Map.toList
+        |> List.map snd
+        |> List.sortWith compareOffset)
 
-// Snapshot/restore for pipeline threading
-let getTable () = _typeTable
-let setTable m = _typeTable <- m
+let getMemberTypes tag (tt: TypeTableMap) =
+    getMembers tag tt |> Result.map (List.map (fun m -> m.member_type))

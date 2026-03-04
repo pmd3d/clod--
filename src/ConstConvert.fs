@@ -19,17 +19,17 @@ let constToInt64 = function
 (** Convert int64 to a constant. Preserve the value if possible and wrap modulo
     the size of the target type otherwise. *)
 let constOfInt64 v = function
-    | T.Char | T.SChar -> C.ConstChar(sbyte v)
-    | T.UChar -> C.ConstUChar(byte v)
-    | T.Int -> C.ConstInt(int32 v)
-    | T.Long -> C.ConstLong v
-    | T.UInt -> C.ConstUInt(uint32 v)
-    | T.ULong | T.Pointer _ -> C.ConstULong(uint64 v)
-    | T.Double -> C.ConstDouble(float v)
+    | T.Char | T.SChar -> Ok (C.ConstChar(sbyte v))
+    | T.UChar -> Ok (C.ConstUChar(byte v))
+    | T.Int -> Ok (C.ConstInt(int32 v))
+    | T.Long -> Ok (C.ConstLong v)
+    | T.UInt -> Ok (C.ConstUInt(uint32 v))
+    | T.ULong | T.Pointer _ -> Ok (C.ConstULong(uint64 v))
+    | T.Double -> Ok (C.ConstDouble(float v))
     | (T.FunType _ | T.Array _ | T.Void | T.Structure _) as t ->
-        failwith
-            ("Internal error: can't convert constant to non_scalar type "
-             + Types.show t)
+        Error (CompilerError.InternalError
+            ("can't convert constant to non_scalar type "
+             + Types.show t))
 
 let uint64ToDouble (ul: uint64) =
     if ul <= uint64 System.Int64.MaxValue then
@@ -41,17 +41,17 @@ let uint64ToDouble (ul: uint64) =
         halfDouble + halfDouble
 
 let constConvert target_type c =
-    if C.typeOfConst c = target_type then c
+    if C.typeOfConst c = target_type then Ok c
     else
         match (target_type, c) with
         (* Convert to/from double directly to avoid precision loss
            going through the int64 roundtrip *)
         | T.Double, C.ConstULong ul ->
-            C.ConstDouble(uint64ToDouble ul)
+            Ok (C.ConstDouble(uint64ToDouble ul))
         | T.Double, _ ->
-            C.ConstDouble(float (constToInt64 c))
+            Ok (C.ConstDouble(float (constToInt64 c)))
         | T.ULong, C.ConstDouble d ->
-            C.ConstULong(uint64 d)
+            Ok (C.ConstULong(uint64 d))
         | _, C.ConstDouble d ->
             constOfInt64 (int64 d) target_type
         | _ ->

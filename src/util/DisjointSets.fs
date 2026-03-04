@@ -8,10 +8,8 @@ let union (x: 'a) (y: 'a) (disjSets: DisjointSet<'a>) : DisjointSet<'a> =
     Map.add x y disjSets
 
 let rec find (x: 'a) (disjSets: DisjointSet<'a>) : 'a =
-    if Map.containsKey x disjSets then
-        let mappedTo = Map.find x disjSets
-        find mappedTo disjSets
-    else
-        x
+    match Map.tryFind x disjSets with
+    | Some mappedTo -> find mappedTo disjSets
+    | None -> x
 
 let isEmpty (disjSets: DisjointSet<'a>) : bool = Map.isEmpty disjSets
