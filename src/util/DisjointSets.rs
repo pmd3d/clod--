@@ -1,37 +1,52 @@
-//! Union-find data structure used by register allocation.
+//! Disjoint-set helpers.
+//!
+//! `DisjointSet` mirrors the deliberately small, persistent representation used
+//! by the F# compiler: an entry maps an element to its parent and absent entries
+//! are roots.  `DisjointSets` is retained as a convenient indexed adapter.
+
+use std::collections::BTreeMap;
+
+pub type DisjointSet<T> = BTreeMap<T, T>;
+
+pub fn init<T>() -> DisjointSet<T> {
+    BTreeMap::new()
+}
+
+pub fn union<T: Ord>(x: T, y: T, sets: &mut DisjointSet<T>) {
+    sets.insert(x, y);
+}
+
+pub fn find<T: Ord + Clone>(x: &T, sets: &DisjointSet<T>) -> T {
+    match sets.get(x) {
+        Some(parent) => find(parent, sets),
+        None => x.clone(),
+    }
+}
+
+pub fn is_empty<T>(sets: &DisjointSet<T>) -> bool {
+    sets.is_empty()
+}
+
 #[derive(Debug, Clone)]
 pub struct DisjointSets {
-    parent: Vec<usize>,
-    rank: Vec<u8>,
+    sets: DisjointSet<usize>,
+    size: usize,
 }
 
 impl DisjointSets {
     pub fn new(size: usize) -> Self {
-        Self {
-            parent: (0..size).collect(),
-            rank: vec![0; size],
-        }
+        Self { sets: init(), size }
     }
 
-    pub fn find(&mut self, x: usize) -> usize {
-        if self.parent[x] != x {
-            self.parent[x] = self.find(self.parent[x]);
-        }
-        self.parent[x]
+    pub fn find(&self, x: usize) -> usize {
+        assert!(x < self.size, "disjoint-set index out of bounds");
+        find(&x, &self.sets)
     }
 
-    pub fn union(&mut self, a: usize, b: usize) {
-        let (mut a, mut b) = (self.find(a), self.find(b));
-        if a == b {
-            return;
-        }
-
-        if self.rank[a] < self.rank[b] {
-            std::mem::swap(&mut a, &mut b);
-        }
-        self.parent[b] = a;
-        if self.rank[a] == self.rank[b] {
-            self.rank[a] += 1;
-        }
+    pub fn union(&mut self, x: usize, y: usize) {
+        assert!(x < self.size && y < self.size, "disjoint-set index out of bounds");
+        union(x, y, &mut self.sets);
     }
+
+    pub fn is_empty(&self) -> bool { is_empty(&self.sets) }
 }
