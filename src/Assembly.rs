@@ -3,7 +3,7 @@
 
 use super::Initializers::StaticInit;
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum AsmReg {
     AX,
     BX,
@@ -39,14 +39,14 @@ pub enum AsmReg {
     XMM15,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub struct AsmIndexedOperand {
     pub base: AsmReg,
     pub index: AsmReg,
     pub scale: i32,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum AsmOperand {
     Imm(i64),
     Reg(AsmReg),
@@ -57,14 +57,14 @@ pub enum AsmOperand {
     Indexed(AsmIndexedOperand),
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum AsmUnaryOperator {
     Neg,
     Not,
     Shr,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum AsmBinaryOperator {
     Add,
     Sub,
@@ -77,7 +77,7 @@ pub enum AsmBinaryOperator {
     ShrBinop,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum AsmCondCode {
     E,
     NE,
@@ -91,13 +91,13 @@ pub enum AsmCondCode {
     BE,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub struct AsmByteArrayInfo {
     pub size: i32,
     pub alignment: i32,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub enum AsmType {
     Byte,
     Longword,
