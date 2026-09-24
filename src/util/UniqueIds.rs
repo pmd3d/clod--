@@ -16,6 +16,8 @@ pub fn make_named_temporary(prefix: &str, counter: Counter) -> (Counter, String)
 }
 
 static SHARED_COUNTER: AtomicUsize = AtomicUsize::new(INITIAL_COUNTER);
+pub fn set_shared_counter(counter: Counter) { SHARED_COUNTER.store(counter, Ordering::SeqCst); }
+pub fn shared_counter() -> Counter { SHARED_COUNTER.load(Ordering::SeqCst) }
 pub fn make_temporary_shared() -> String {
     let counter = SHARED_COUNTER.fetch_add(1, Ordering::Relaxed);
     format!("tmp.{counter}")

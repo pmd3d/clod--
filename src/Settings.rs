@@ -18,3 +18,12 @@ pub struct Optimizations {
     pub unreachable_code_elimination: bool,
     pub copy_propagation: bool,
 }
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum Stage { Lex, Parse, Validate, Tacky, Codegen, Assembly }
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct CompilerConfig {
+    pub Debug: bool,
+    pub Platform: Target,
+}
