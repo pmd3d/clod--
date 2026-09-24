@@ -1,6 +1,8 @@
 //! Assembly intermediate-representation types needed by the backend.
 #![allow(non_snake_case)]
 
+use super::Initializers::StaticInit;
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum AsmReg {
     AX,
@@ -150,4 +152,68 @@ pub enum AsmInstruction {
     Pop(AsmReg),
     Call(String),
     Ret,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AsmFunctionDef {
+    pub name: String,
+    pub global: bool,
+    pub instructions: Vec<AsmInstruction>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct AsmStaticVariableDef {
+    pub name: String,
+    pub alignment: i32,
+    pub global: bool,
+    pub init: Vec<StaticInit>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct AsmStaticConstantDef {
+    pub name: String,
+    pub alignment: i32,
+    pub init: StaticInit,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum AsmTopLevel {
+    Function(AsmFunctionDef),
+    StaticVariable(AsmStaticVariableDef),
+    StaticConstant(AsmStaticConstantDef),
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum AsmProgram {
+    Program(Vec<AsmTopLevel>),
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn represents_every_top_level_definition() {
+        let program = AsmProgram::Program(vec![
+            AsmTopLevel::Function(AsmFunctionDef {
+                name: "main".into(),
+                global: true,
+                instructions: vec![AsmInstruction::Ret],
+            }),
+            AsmTopLevel::StaticVariable(AsmStaticVariableDef {
+                name: "counter".into(),
+                alignment: 4,
+                global: false,
+                init: vec![StaticInit::IntInit(0)],
+            }),
+            AsmTopLevel::StaticConstant(AsmStaticConstantDef {
+                name: "message".into(),
+                alignment: 1,
+                init: StaticInit::StringInit("hello".into(), true),
+            }),
+        ]);
+
+        let AsmProgram::Program(definitions) = program;
+        assert_eq!(definitions.len(), 3);
+    }
 }
