@@ -1,0 +1,55 @@
+# F# to Rust conversion inventory
+
+Every F# compilation unit from the previous revision now has a Rust counterpart in the same directory.
+
+- [x] `src/AsmCfg.fs` → `src/AsmCfg.rs`
+- [x] `src/Assembly.fs` → `src/Assembly.rs`
+- [x] `src/Ast.fs` → `src/Ast.rs`
+- [x] `src/BackwardDataflow.fs` → `src/BackwardDataflow.rs`
+- [x] `src/Bytes.fs` → `src/Bytes.rs`
+- [x] `src/Cfg.fs` → `src/Cfg.rs`
+- [x] `src/Compile.fs` → `src/Compile.rs`
+- [x] `src/CompilerError.fs` → `src/CompilerError.rs`
+- [x] `src/Const.fs` → `src/Const.rs`
+- [x] `src/ConstConvert.fs` → `src/ConstConvert.rs`
+- [x] `src/Emit.fs` → `src/Emit.rs`
+- [x] `src/Initializers.fs` → `src/Initializers.rs`
+- [x] `src/Lex.fs` → `src/Lex.rs`
+- [x] `src/Parse.fs` → `src/Parse.rs`
+- [x] `src/Program.fs` → `src/Program.rs`
+- [x] `src/RegSet.fs` → `src/RegSet.rs`
+- [x] `src/Settings.fs` → `src/Settings.rs`
+- [x] `src/Stream.fs` → `src/Stream.rs`
+- [x] `src/Symbols.fs` → `src/Symbols.rs`
+- [x] `src/Tacky.fs` → `src/Tacky.rs`
+- [x] `src/TackyCfg.fs` → `src/TackyCfg.rs`
+- [x] `src/TackyGen.fs` → `src/TackyGen.rs`
+- [x] `src/TackyPrint.fs` → `src/TackyPrint.rs`
+- [x] `src/TokStream.fs` → `src/TokStream.rs`
+- [x] `src/Tokens.fs` → `src/Tokens.rs`
+- [x] `src/TypeTable.fs` → `src/TypeTable.rs`
+- [x] `src/Types.fs` → `src/Types.rs`
+- [x] `src/backend/AssemblySymbols.fs` → `src/backend/AssemblySymbols.rs`
+- [x] `src/backend/Codegen.fs` → `src/backend/Codegen.rs`
+- [x] `src/backend/InstructionFixup.fs` → `src/backend/InstructionFixup.rs`
+- [x] `src/backend/Regalloc.fs` → `src/backend/Regalloc.rs`
+- [x] `src/backend/ReplacePseudos.fs` → `src/backend/ReplacePseudos.rs`
+- [x] `src/optimizations/AddressTaken.fs` → `src/optimizations/AddressTaken.rs`
+- [x] `src/optimizations/Optimize.fs` → `src/optimizations/Optimize.rs`
+- [x] `src/semantic_analysis/LabelLoops.fs` → `src/semantic_analysis/LabelLoops.rs`
+- [x] `src/semantic_analysis/Resolve.fs` → `src/semantic_analysis/Resolve.rs`
+- [x] `src/semantic_analysis/Typecheck.fs` → `src/semantic_analysis/Typecheck.rs`
+- [x] `src/util/DisjointSets.fs` → `src/util/DisjointSets.rs`
+- [x] `src/util/Int8.fs` → `src/util/Int8.rs`
+- [x] `src/util/ListUtil.fs` → `src/util/ListUtil.rs`
+- [x] `src/util/ResultCE.fs` → `src/util/ResultCE.rs`
+- [x] `src/util/Rounding.fs` → `src/util/Rounding.rs`
+- [x] `src/util/StringUtil.fs` → `src/util/StringUtil.rs`
+- [x] `src/util/TypeUtils.fs` → `src/util/TypeUtils.rs`
+- [x] `src/util/UniqueIds.fs` → `src/util/UniqueIds.rs`
+- [x] `tests/Program.fs` → `tests/Program.rs`
+- [x] `tests/TestConvert.fs` → `tests/TestConvert.rs`
+- [x] `tests/TestInt8.fs` → `tests/TestInt8.rs`
+- [x] `tests/TestLexer.fs` → `tests/TestLexer.rs`
+- [x] `tests/TestParser.fs` → `tests/TestParser.rs`
+- [x] `tests/TestUtil.fs` → `tests/TestUtil.rs`

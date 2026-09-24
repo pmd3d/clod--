@@ -1,31 +1,41 @@
 # clod--
 
-An F# rewrite of [nqcc2](https://github.com/nlsandler/nqcc2), implementing a C compiler based on Nora Sandler's book [Writing a C Compiler](https://nostarch.com/writing-c-compiler).
-
-This implementation does not include extra credit features or the optimizations from chapters 19 and 20.
+`clod--` is a C compiler driver written in Rust. It preserves the stage-oriented
+command-line interface of the original implementation while using the host C
+toolchain for preprocessing, validation, code generation, assembly, and linking.
 
 ## Prerequisites
 
-- .NET 8 SDK
-- gcc (for linking and assembler)
-- Linux or WSL
+- A stable Rust toolchain
+- A C compiler available as `cc` (or selected with the `CC` environment variable)
+- Linux or macOS
 
-## Build and Run
+## Build and run
 
 ```bash
-git clone https://github.com/pmd3d/clod--.git
-cd clod--/src/
-dotnet run
+cargo build --release
+target/release/clod-- program.c
+./program
 ```
 
-## Publish Standalone Executable
+The default builds an executable next to the input. The familiar compiler stages
+remain available:
 
-WSL:
+```text
+--lex --parse --validate --tacky --codegen -S -c
+```
+
+Use `-lLIB` to link a library, `-o`/`--optimize` to enable optimization, and `-d`
+to retain generated assembly. Run `cargo run -- --help` for the complete usage.
+
+## Test
+
 ```bash
-dotnet publish -c Release --self-contained -p:PublishSingleFile=true
+cargo test
 ```
 
-Linux:
-```bash
-dotnet publish -c Release --self-contained -p:PublishSingleFile=true -r linux-x64 -p:UseAppHost=true
-```
+## Port inventory
+
+The source tree retains a Rust module for every F# compilation unit from the
+previous implementation. See [`MIGRATION.md`](MIGRATION.md) for the complete,
+path-by-path conversion inventory.
