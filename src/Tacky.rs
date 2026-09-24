@@ -1,4 +1,8 @@
 //! Three-address ("TACKY") intermediate representation.
+#![allow(non_snake_case)]
+
+use std::cmp::Ordering;
+use std::io::{self, Write};
 
 use super::{
     Const::{self, ConstValue},
@@ -33,6 +37,31 @@ pub enum TackyBinaryOperator {
 pub enum TackyVal {
     Constant(ConstValue),
     Var(String),
+}
+
+/// Compare constants as map keys, keeping positive and negative zero distinct.
+///
+/// The ordinary constant comparison deliberately considers the two zeroes
+/// equal.  TACKY optimizations use this comparison when the distinction is
+/// observable (for example, after division by zero).
+pub fn constCompare(a: &ConstValue, b: &ConstValue) -> Ordering {
+    match (*a, *b) {
+        (ConstValue::Double(left), ConstValue::Double(right)) if left == right => {
+            left.signum().total_cmp(&right.signum())
+        }
+        _ => a.partial_cmp(b).expect("constants have a total ordering"),
+    }
+}
+
+pub fn showTackyVal(value: &TackyVal) -> String {
+    match value {
+        TackyVal::Constant(constant) => Const::show(*constant),
+        TackyVal::Var(name) => name.clone(),
+    }
+}
+
+pub fn ppTackyVal(out: &mut impl Write, value: &TackyVal) -> io::Result<()> {
+    out.write_all(showTackyVal(value).as_bytes())
 }
 
 pub fn typeOfVal(value: &TackyVal) -> Type {
@@ -150,3 +179,26 @@ pub enum TackyTopLevel {
 }
 #[derive(Clone, Debug, PartialEq)]
 pub struct TackyProgram(pub Vec<TackyTopLevel>);
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn constant_comparison_distinguishes_signed_zero() {
+        assert_eq!(
+            constCompare(&ConstValue::Double(-0.0), &ConstValue::Double(0.0)),
+            Ordering::Less
+        );
+        assert_eq!(
+            constCompare(&ConstValue::Double(0.0), &ConstValue::Double(-0.0)),
+            Ordering::Greater
+        );
+    }
+
+    #[test]
+    fn tacky_values_use_constant_debug_syntax() {
+        assert_eq!(showTackyVal(&TackyVal::Constant(ConstValue::UInt(42))), "42U");
+        assert_eq!(showTackyVal(&TackyVal::Var("answer".into())), "answer");
+    }
+}
