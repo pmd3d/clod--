@@ -1,0 +1,18 @@
+[package]
+name = "clod--"
+version = "0.1.0"
+edition = "2021"
+description = "A small C compiler driver"
+license = "MIT"
+
+[lib]
+name = "clod"
+path = "src/lib.rs"
+
+[[bin]]
+name = "clod--"
+path = "src/main.rs"
+
+[profile.release]
+strip = true
+lto = true
