@@ -125,3 +125,65 @@ pub enum Declaration {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct UntypedProgram(pub Vec<Declaration>);
+
+/// Expression annotated with the type assigned by semantic analysis.
+#[derive(Clone, Debug, PartialEq)]
+pub struct TypedExp {
+    pub e: TypedInnerExp,
+    pub t: Type,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum TypedInnerExp {
+    Constant(Constant), Var(String), String(String),
+    Cast(Type, Box<TypedExp>), Unary(UnaryOperator, Box<TypedExp>),
+    Binary(BinaryOperator, Box<TypedExp>, Box<TypedExp>),
+    Assignment(Box<TypedExp>, Box<TypedExp>),
+    Conditional(Box<TypedExp>, Box<TypedExp>, Box<TypedExp>),
+    FunCall(String, Vec<TypedExp>), Dereference(Box<TypedExp>),
+    AddrOf(Box<TypedExp>), Subscript(Box<TypedExp>, Box<TypedExp>),
+    SizeOf(Box<TypedExp>), SizeOfT(Type), Dot(Box<TypedExp>, String),
+    Arrow(Box<TypedExp>, String),
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum TypedInitializer {
+    SingleInit(TypedExp),
+    CompoundInit(Type, Vec<TypedInitializer>),
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct TypedVariableDeclaration {
+    pub name: String, pub varType: Type, pub init: Option<TypedInitializer>,
+    pub storageClass: Option<StorageClass>,
+}
+#[derive(Clone, Debug, PartialEq)]
+pub struct TypedStructDeclaration { pub tag: String, pub members: Vec<MemberDeclaration> }
+#[derive(Clone, Debug, PartialEq)]
+pub struct TypedFunctionDeclaration {
+    pub name: String, pub funType: Type, pub params: Vec<String>,
+    pub body: Option<TypedBlock>, pub storageClass: Option<StorageClass>,
+}
+#[derive(Clone, Debug, PartialEq)]
+pub enum TypedForInit { InitDecl(TypedVariableDeclaration), InitExp(Option<TypedExp>) }
+#[derive(Clone, Debug, PartialEq)]
+#[allow(clippy::large_enum_variant)]
+pub enum TypedStatement {
+    Return(Option<TypedExp>), Expression(TypedExp),
+    If(TypedExp, Box<TypedStatement>, Option<Box<TypedStatement>>),
+    Compound(TypedBlock), Break(String), Continue(String),
+    While(TypedExp, Box<TypedStatement>, String),
+    DoWhile(Box<TypedStatement>, TypedExp, String),
+    For(TypedForInit, Option<TypedExp>, Option<TypedExp>, Box<TypedStatement>, String), Null,
+}
+#[derive(Clone, Debug, PartialEq)]
+pub enum TypedBlockItem { Stmt(TypedStatement), Decl(TypedDeclaration) }
+#[derive(Clone, Debug, PartialEq)]
+pub struct TypedBlock(pub Vec<TypedBlockItem>);
+#[derive(Clone, Debug, PartialEq)]
+pub enum TypedDeclaration {
+    FunDecl(TypedFunctionDeclaration), VarDecl(TypedVariableDeclaration),
+    StructDecl(TypedStructDeclaration),
+}
+#[derive(Clone, Debug, PartialEq)]
+pub struct TypedProgram(pub Vec<TypedDeclaration>);
