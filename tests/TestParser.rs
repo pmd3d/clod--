@@ -1,7 +1,7 @@
 #![allow(non_snake_case)]
 use clod::ports::Ast::{
-    BinaryOperator, Block, BlockItem, Declaration, Exp, Initializer, MemberDeclaration, Statement,
-    StorageClass, StructDeclaration, VariableDeclaration,
+    BinaryOperator, Block, BlockItem, Declaration, Exp, ForInit, Initializer, MemberDeclaration,
+    Statement, StorageClass, StructDeclaration, VariableDeclaration,
 };
 use clod::ports::Const::Constant;
 use clod::ports::Lex::lex;
@@ -320,4 +320,181 @@ fn rejects_trailing_top_level_tokens_at_the_first_invalid_declaration() {
         parse(lex("int value; return 0;").unwrap()),
         Err("Expected a type or storage-class specifier but found KWReturn".into())
     );
+}
+
+#[test]
+fn parses_every_constant_variant_at_its_conversion_boundaries() {
+    let cases = [
+        (Token::ConstInt(0), Constant::Int(0)),
+        (Token::ConstInt(i32::MAX as u128), Constant::Int(i32::MAX)),
+        (
+            Token::ConstInt(i32::MAX as u128 + 1),
+            Constant::Long(i32::MAX as i64 + 1),
+        ),
+        (Token::ConstLong(i64::MAX as u128), Constant::Long(i64::MAX)),
+        (Token::ConstUInt(u32::MAX as u128), Constant::UInt(u32::MAX)),
+        (
+            Token::ConstUInt(u32::MAX as u128 + 1),
+            Constant::ULong(u32::MAX as u64 + 1),
+        ),
+        (
+            Token::ConstULong(u64::MAX as u128),
+            Constant::ULong(u64::MAX),
+        ),
+        (Token::ConstDouble(1.25), Constant::Double(1.25)),
+        (Token::ConstChar("\\n".into()), Constant::Int('\n' as i32)),
+    ];
+
+    for (token, expected) in cases {
+        let (constant, rest) =
+            parseConst(TokStream::ofList(vec![token, Token::Semicolon])).unwrap();
+        assert_eq!(constant, expected);
+        assert_eq!(rest.peek(), Some(&Token::Semicolon));
+    }
+
+    let overflow_cases = [
+        (
+            Token::ConstInt(i64::MAX as u128 + 1),
+            "Constant is too large to represent as an int or long",
+        ),
+        (
+            Token::ConstLong(i64::MAX as u128 + 1),
+            "Constant is too large to represent as an int or long",
+        ),
+        (
+            Token::ConstUInt(u64::MAX as u128 + 1),
+            "Constant is too large to represent as an unsigned int or unsigned long",
+        ),
+        (
+            Token::ConstULong(u64::MAX as u128 + 1),
+            "Constant is too large to represent as an unsigned int or unsigned long",
+        ),
+        (
+            Token::ConstChar("ab".into()),
+            "multi-character constant tokens not supported",
+        ),
+    ];
+    for (token, expected) in overflow_cases {
+        assert_eq!(
+            parseConst(TokStream::ofList(vec![token])).unwrap_err(),
+            expected
+        );
+    }
+}
+
+#[test]
+fn reports_malformed_abstract_and_concrete_declarators_at_the_first_error() {
+    let cases = [
+        (
+            "int values[2);",
+            "Expected CloseBracket but found CloseParen",
+        ),
+        (
+            "int (*callback)(void);",
+            "can't apply additional type derivations to a function declarator",
+        ),
+        (
+            "int apply(int callback(void));",
+            "Function pointers in parameters are not supported",
+        ),
+        (
+            "struct s { int member(void); };",
+            "Found function declarator in struct member list",
+        ),
+    ];
+    for (source, expected) in cases {
+        assert_eq!(
+            parse(lex(source).unwrap()),
+            Err(expected.into()),
+            "{source}"
+        );
+    }
+
+    assert_eq!(
+        parseExp(0, TokStream::ofList(lex("sizeof(int [2); ").unwrap())).unwrap_err(),
+        "Expected CloseBracket but found CloseParen"
+    );
+}
+
+#[test]
+fn parses_forward_structs_prototypes_and_definitions_in_order() {
+    let program = parse(
+        lex("struct node; static int helper(int value); int helper(int value) { return value; }")
+            .unwrap(),
+    )
+    .unwrap();
+
+    assert!(matches!(
+        program.0.as_slice(),
+        [
+            Declaration::StructDecl(StructDeclaration { members, .. }),
+            Declaration::FunDecl(prototype),
+            Declaration::FunDecl(definition),
+        ] if members.is_empty()
+            && prototype.body.is_none()
+            && prototype.storageClass == Some(StorageClass::Static)
+            && definition.body.is_some()
+            && definition.params == ["value"]
+    ));
+}
+
+#[test]
+fn parses_every_statement_branch_and_preserves_the_suffix() {
+    let cases = [
+        "return; trailing",
+        "if (1) break; else continue; trailing",
+        "while (1) ; trailing",
+        "do ; while (1); trailing",
+        "for (int i = 0; i < 2; i = i + 1) ; trailing",
+        "{ int value; value = 1; } trailing",
+        "; trailing",
+        "value = 1; trailing",
+    ];
+
+    for source in cases {
+        let (statement, rest) = parseStatement(TokStream::ofList(lex(source).unwrap())).unwrap();
+        assert_eq!(
+            rest.peek(),
+            Some(&Token::Identifier("trailing".into())),
+            "{source}"
+        );
+        match source {
+            s if s.starts_with("return") => assert!(matches!(statement, Statement::Return(None))),
+            s if s.starts_with("if") => assert!(matches!(statement, Statement::If(..))),
+            s if s.starts_with("while") => assert!(matches!(statement, Statement::While(..))),
+            s if s.starts_with("do") => assert!(matches!(statement, Statement::DoWhile(..))),
+            s if s.starts_with("for") => assert!(matches!(
+                statement,
+                Statement::For(ForInit::InitDecl(_), Some(_), Some(_), _, _)
+            )),
+            s if s.starts_with('{') => assert!(matches!(statement, Statement::Compound(_))),
+            s if s.starts_with(';') => assert_eq!(statement, Statement::Null),
+            _ => assert!(matches!(statement, Statement::Expression(_))),
+        }
+    }
+}
+
+#[test]
+fn reports_each_missing_statement_delimiter_without_panicking() {
+    let cases = [
+        ("if 1) ;", "Expected OpenParen but found (ConstInt 1)"),
+        ("if (1 ;", "Expected CloseParen but found Semicolon"),
+        (
+            "do ; while 1);",
+            "Expected OpenParen but found (ConstInt 1)",
+        ),
+        ("do ; while (1;", "Expected CloseParen but found Semicolon"),
+        ("do ; while (1)", "Unexpected end of file"),
+        ("for 1; ; ) ;", "Expected OpenParen but found (ConstInt 1)"),
+        ("for (1 2; ) ;", "Expected Semicolon but found (ConstInt 2)"),
+        ("for (; 1 2) ;", "Expected Semicolon but found (ConstInt 2)"),
+        ("for (; ; 1 ;", "Expected CloseParen but found Semicolon"),
+    ];
+    for (source, expected) in cases {
+        assert_eq!(
+            parseStatement(TokStream::ofList(lex(source).unwrap())).unwrap_err(),
+            expected,
+            "{source}"
+        );
+    }
 }
