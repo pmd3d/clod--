@@ -294,3 +294,30 @@ fn reports_first_error_in_truncated_collections() {
         );
     }
 }
+
+#[test]
+fn reports_first_error_for_each_truncated_statement_delimiter() {
+    let cases = [
+        ("if (1 ", "Unexpected end of file"),
+        ("if (1) return 0; else ", "Unexpected end of file"),
+        ("while (1 ", "Unexpected end of file"),
+        ("do return 0; while (1 ", "Unexpected end of file"),
+        ("for (int i = 0; i < 2 ", "Unexpected end of file"),
+        ("{ return 0;", "Unexpected end of file"),
+    ];
+    for (source, expected) in cases {
+        assert_eq!(
+            parseStatement(TokStream::ofList(lex(source).unwrap())).unwrap_err(),
+            expected,
+            "{source}"
+        );
+    }
+}
+
+#[test]
+fn rejects_trailing_top_level_tokens_at_the_first_invalid_declaration() {
+    assert_eq!(
+        parse(lex("int value; return 0;").unwrap()),
+        Err("Expected a type or storage-class specifier but found KWReturn".into())
+    );
+}

@@ -213,6 +213,12 @@ The migration is **in progress**.  The implementation now has the Phase 11
   structure members, blocks, and whole programs. Successful fixtures assert
   AST construction order and, where exposed, the unconsumed suffix; malformed
   fixtures assert the exact first error.
+- Statement-delimiter and trailing-top-level fixtures now assert the first
+  parser error for truncated `if`, `while`, `do`, `for`, and compound
+  statements, and for a non-declaration after a valid file-scope declaration.
+- Compiler integration tests now assert the exact `CompilerError` variant and
+  message for lexer failures, parser failures, name-resolution failures, and
+  typechecking failures.
 
 The declaration-by-declaration crosswalk against `2888aa6` is now complete in
 `PARSER_RESULT_CROSSWALK.md`. It records success shapes, remaining-stream
@@ -224,6 +230,4 @@ complete:
 1. Expand boundary fixtures for all constant variants, malformed abstract and
    concrete declarators, every truncated delimiter, structure members,
    prototypes/definitions, statement branches, and trailing top-level input.
-2. Add compiler integration coverage that distinguishes parser failures from
-   downstream validation failures, then run the full formatter, test, and
-   warnings-denied Clippy matrix.
+2. Run the full formatter, test, and warnings-denied Clippy matrix.

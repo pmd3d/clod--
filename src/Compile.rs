@@ -99,12 +99,18 @@ mod tests {
     fn config() -> CompilerConfig { CompilerConfig { Debug: false, Platform: Target::Linux } }
 
     #[test]
-    fn reports_lex_and_parse_errors() {
+    fn classifies_frontend_failures_by_pipeline_stage() {
         let options = Optimizations::default();
-        assert!(matches!(compile(&config(), Stage::Lex, &options, "bad.c", "@"),
-                         Err(CompilerError::LexError(_))));
-        assert!(matches!(compile(&config(), Stage::Parse, &options, "bad.c", "int ;"),
-                         Err(CompilerError::ParseError(_))));
+        assert_eq!(
+            compile(&config(), Stage::Lex, &options, "bad.c", "@"),
+            Err(CompilerError::LexError("@".into())),
+        );
+        assert_eq!(
+            compile(&config(), Stage::Parse, &options, "bad.c", "int ;"),
+            Err(CompilerError::ParseError(
+                "Expected a simple declarator but found Semicolon".into(),
+            )),
+        );
     }
 
     #[test]
