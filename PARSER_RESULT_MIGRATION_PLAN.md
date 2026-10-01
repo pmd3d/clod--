@@ -74,7 +74,7 @@ resolved (or explicitly proven equivalent) during the rewrite:
 
 ## Ordered implementation plan
 
-### 1. Freeze the comparison baseline
+### 1. Freeze the comparison baseline ✅
 
 - Record the parent and reviewed versions of `src/Parse.fs`, `src/Compile.fs`,
   and `tests/TestParser.fs` from `2888aa6`.
@@ -85,6 +85,11 @@ resolved (or explicitly proven equivalent) during the rewrite:
 
 **Exit criterion:** every declaration in the reviewed `Parse.fs` is mapped to a
 Rust item or to a written, tested equivalence justification.
+
+**Progress:** Complete. `PARSER_RESULT_CROSSWALK.md` freezes the three reviewed
+Git objects, records the result/stream conventions, and maps every top-level and
+nested parser declaration. Iterative or decomposed implementations are labeled
+for differential testing rather than being assumed equivalent.
 
 ### 2. Port token lookahead and diagnostics first
 
@@ -203,19 +208,20 @@ The migration is **in progress**.  The implementation now has the Phase 11
   panic as parser control flow; lexer and parser classification are covered by
   compiler tests.
 
+The declaration-by-declaration crosswalk against `2888aa6` is now complete in
+`PARSER_RESULT_CROSSWALK.md`. It records success shapes, remaining-stream
+contracts, first-error behavior, and every inlined or decomposed Rust analogue.
+
 The following work remains before the acceptance matrix can be marked
 complete:
 
-1. Finish the declaration-by-declaration crosswalk against `2888aa6`, recording
-   success values, remaining token streams, and exact failures rather than
-   relying only on source inspection.
-2. Replace or explicitly justify the remaining iterative collection routines
+1. Replace or explicitly justify the remaining iterative collection routines
    (specifier lists, argument/postfix/array suffixes, initializers, structure
    members, blocks, and programs) after differential fixtures establish that
    they preserve the F# bind and first-error order.
-3. Expand boundary fixtures for all constant variants, malformed abstract and
+2. Expand boundary fixtures for all constant variants, malformed abstract and
    concrete declarators, every truncated delimiter, structure members,
    prototypes/definitions, statement branches, and trailing top-level input.
-4. Add compiler integration coverage that distinguishes parser failures from
+3. Add compiler integration coverage that distinguishes parser failures from
    downstream validation failures, then run the full formatter, test, and
    warnings-denied Clippy matrix.
