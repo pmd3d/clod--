@@ -224,10 +224,15 @@ The declaration-by-declaration crosswalk against `2888aa6` is now complete in
 `PARSER_RESULT_CROSSWALK.md`. It records success shapes, remaining-stream
 contracts, first-error behavior, and every inlined or decomposed Rust analogue.
 
-The following work remains before the acceptance matrix can be marked
-complete:
+The Phase 11 parser-to-`Result` migration is now **complete**. Boundary
+fixtures cover every constant token variant and its promotion/overflow edges,
+malformed abstract and concrete declarators, structure-member restrictions,
+forward declarations, function prototypes and definitions, every statement
+branch, missing statement delimiters, and trailing top-level input. These join
+the earlier collection, lookahead, diagnostic, and compiler-classification
+fixtures to satisfy the acceptance matrix.
 
-1. Expand boundary fixtures for all constant variants, malformed abstract and
-   concrete declarators, every truncated delimiter, structure members,
-   prototypes/definitions, statement branches, and trailing top-level input.
-2. Run the full formatter, test, and warnings-denied Clippy matrix.
+The completed implementation passes the full formatter, unit/integration test,
+and warnings-denied Clippy matrix. Future parser changes can therefore be made
+as behavior-preserving refactors against this Phase 11 baseline rather than as
+part of the migration itself.
