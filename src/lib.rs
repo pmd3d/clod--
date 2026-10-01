@@ -7,7 +7,7 @@ use std::env;
 use std::ffi::{OsStr, OsString};
 use std::fmt;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::process::{Command, ExitStatus};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -34,6 +34,7 @@ pub struct Options {
     pub target: Target,
     pub debug: bool,
     pub optimize: bool,
+    pub optimizations: ports::Settings::Optimizations,
     pub libraries: Vec<String>,
     pub source: PathBuf,
 }
@@ -43,6 +44,7 @@ pub enum Error {
     Usage(String),
     Io(std::io::Error),
     ToolFailed { tool: String, status: ExitStatus },
+    Compiler(ports::CompilerError::CompilerError),
 }
 
 impl fmt::Display for Error {
@@ -53,6 +55,7 @@ impl fmt::Display for Error {
             Self::ToolFailed { tool, status } => {
                 write!(formatter, "{tool} exited with {status}")
             }
+            Self::Compiler(error) => error.fmt(formatter),
         }
     }
 }
@@ -92,6 +95,7 @@ where
     let mut target = host_target();
     let mut debug = false;
     let mut optimize = false;
+    let mut optimizations = ports::Settings::Optimizations::default();
     let mut libraries = Vec::new();
     let mut source = None;
 
@@ -115,12 +119,11 @@ where
             match argument.as_ref() {
                 "-h" | "--help" => return usage(USAGE),
                 "-d" => debug = true,
-                "-o"
-                | "--optimize"
-                | "--fold-constants"
-                | "--eliminate-dead-stores"
-                | "--propagate-copies"
-                | "--eliminate-unreachable-code" => optimize = true,
+                "-o" | "--optimize" => optimize = true,
+                "--fold-constants" => optimizations.constant_folding = true,
+                "--eliminate-dead-stores" => optimizations.dead_store_elimination = true,
+                "--propagate-copies" => optimizations.copy_propagation = true,
+                "--eliminate-unreachable-code" => optimizations.unreachable_code_elimination = true,
                 "-l" => {
                     index += 1;
                     let library = arguments
@@ -161,7 +164,21 @@ where
         stage: stage.unwrap_or(Stage::Executable),
         target,
         debug,
-        optimize,
+        optimize: optimize
+            || optimizations.constant_folding
+            || optimizations.dead_store_elimination
+            || optimizations.copy_propagation
+            || optimizations.unreachable_code_elimination,
+        optimizations: if optimize {
+            ports::Settings::Optimizations {
+                constant_folding: true,
+                dead_store_elimination: true,
+                unreachable_code_elimination: true,
+                copy_propagation: true,
+            }
+        } else {
+            optimizations
+        },
         libraries,
         source,
     })
@@ -192,28 +209,52 @@ pub fn run(options: &Options) -> Result<(), Error> {
         return usage(format!("file not found: {}", options.source.display()));
     }
 
-    let compiler = env::var_os("CC").unwrap_or_else(|| OsString::from("cc"));
+    let compiler = env::var_os("CC").unwrap_or_else(|| OsString::from("gcc"));
     let stem = options.source.with_extension("");
+    let preprocessed = options.source.with_extension("i");
     let assembly = options.source.with_extension("s");
     let object = options.source.with_extension("o");
 
+    invoke(
+        &compiler,
+        [
+            OsStr::new("-E"),
+            OsStr::new("-P"),
+            options.source.as_os_str(),
+            OsStr::new("-o"),
+            preprocessed.as_os_str(),
+        ],
+    )?;
+    let compile_result = fs::read_to_string(&preprocessed)
+        .map_err(Error::Io)
+        .and_then(|source| {
+            let config = ports::Settings::CompilerConfig {
+                Debug: options.debug,
+                Platform: match options.target {
+                    Target::Linux => ports::Settings::Target::Linux,
+                    Target::MacOs => ports::Settings::Target::OS_X,
+                },
+            };
+            ports::Compile::compile(
+                &config,
+                compiler_stage(options.stage),
+                &options.optimizations,
+                &preprocessed,
+                &source,
+            )
+            .map_err(Error::Compiler)
+        });
+    let _ = fs::remove_file(&preprocessed);
+    compile_result?;
+
     match options.stage {
-        Stage::Lex => invoke(
-            &compiler,
-            [
-                OsStr::new("-E"),
-                options.source.as_os_str(),
-                OsStr::new("-o"),
-                null_device(),
-            ],
-        ),
-        Stage::Parse | Stage::Validate | Stage::Tacky | Stage::Codegen => invoke(
-            &compiler,
-            [OsStr::new("-fsyntax-only"), options.source.as_os_str()],
-        ),
-        Stage::Assembly => compile_to_assembly(&compiler, options, &assembly),
+        Stage::Lex
+        | Stage::Parse
+        | Stage::Validate
+        | Stage::Tacky
+        | Stage::Codegen
+        | Stage::Assembly => Ok(()),
         Stage::Object => {
-            compile_to_assembly(&compiler, options, &assembly)?;
             let result = invoke(
                 &compiler,
                 [
@@ -229,7 +270,6 @@ pub fn run(options: &Options) -> Result<(), Error> {
             result
         }
         Stage::Executable => {
-            compile_to_assembly(&compiler, options, &assembly)?;
             let mut command = Command::new(&compiler);
             command.arg(&assembly);
             for library in &options.libraries {
@@ -245,14 +285,15 @@ pub fn run(options: &Options) -> Result<(), Error> {
     }
 }
 
-fn compile_to_assembly(compiler: &OsStr, options: &Options, output: &Path) -> Result<(), Error> {
-    let mut command = Command::new(compiler);
-    command.arg("-S");
-    if options.optimize {
-        command.arg("-O2");
+fn compiler_stage(stage: Stage) -> ports::Settings::Stage {
+    match stage {
+        Stage::Lex => ports::Settings::Stage::Lex,
+        Stage::Parse => ports::Settings::Stage::Parse,
+        Stage::Validate => ports::Settings::Stage::Validate,
+        Stage::Tacky => ports::Settings::Stage::Tacky,
+        Stage::Codegen => ports::Settings::Stage::Codegen,
+        Stage::Assembly | Stage::Object | Stage::Executable => ports::Settings::Stage::Assembly,
     }
-    command.arg(&options.source).arg("-o").arg(output);
-    execute(command)
 }
 
 fn invoke<const N: usize>(tool: &OsStr, arguments: [&OsStr; N]) -> Result<(), Error> {
@@ -269,16 +310,6 @@ fn execute(mut command: Command) -> Result<(), Error> {
     } else {
         Err(Error::ToolFailed { tool, status })
     }
-}
-
-#[cfg(unix)]
-fn null_device() -> &'static OsStr {
-    OsStr::new("/dev/null")
-}
-
-#[cfg(windows)]
-fn null_device() -> &'static OsStr {
-    OsStr::new("NUL")
 }
 
 #[cfg(test)]
