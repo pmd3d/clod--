@@ -43,7 +43,14 @@ pub struct Options {
 pub enum Error {
     Usage(String),
     Io(std::io::Error),
-    ToolFailed { tool: String, status: ExitStatus },
+    ToolLaunch {
+        tool: String,
+        source: std::io::Error,
+    },
+    ToolFailed {
+        tool: String,
+        status: ExitStatus,
+    },
     Compiler(ports::CompilerError::CompilerError),
 }
 
@@ -52,6 +59,18 @@ impl fmt::Display for Error {
         match self {
             Self::Usage(message) => formatter.write_str(message),
             Self::Io(error) => error.fmt(formatter),
+            Self::ToolLaunch { tool, source } if source.kind() == std::io::ErrorKind::NotFound => {
+                write!(
+                    formatter,
+                    "could not find C toolchain command '{tool}'. Install GCC (use WSL on Windows) or set CC to the command or full path of a compatible C compiler"
+                )
+            }
+            Self::ToolLaunch { tool, source } => {
+                write!(
+                    formatter,
+                    "could not run C toolchain command '{tool}': {source}"
+                )
+            }
             Self::ToolFailed { tool, status } => {
                 write!(formatter, "{tool} exited with {status}")
             }
@@ -304,7 +323,10 @@ fn invoke<const N: usize>(tool: &OsStr, arguments: [&OsStr; N]) -> Result<(), Er
 
 fn execute(mut command: Command) -> Result<(), Error> {
     let tool = command.get_program().to_string_lossy().into_owned();
-    let status = command.status()?;
+    let status = command.status().map_err(|source| Error::ToolLaunch {
+        tool: tool.clone(),
+        source,
+    })?;
     if status.success() {
         Ok(())
     } else {
@@ -341,6 +363,16 @@ mod tests {
     fn validates_source_extension() {
         let error = parse_args(["hello.rs"]).unwrap_err();
         assert!(error.to_string().contains(".c or .h"));
+    }
+
+    #[test]
+    fn missing_tool_error_identifies_the_toolchain_instead_of_the_source() {
+        let command = Command::new("clod--tool-that-does-not-exist");
+        let error = execute(command).unwrap_err();
+        let message = error.to_string();
+
+        assert!(message.contains("C toolchain command 'clod--tool-that-does-not-exist'"));
+        assert!(message.contains("set CC"));
     }
 }
 

@@ -8,8 +8,14 @@ generated assembly; lexing through code generation runs in the Rust compiler.
 ## Prerequisites
 
 - A stable Rust toolchain
-- A C compiler available as `cc` (or selected with the `CC` environment variable)
+- GCC available as `gcc` (or a compatible compiler selected with the `CC`
+  environment variable)
 - Linux or macOS
+
+Native Windows is not currently a compilation target. On Windows, run `clod--`
+inside WSL with GCC installed. PowerShell paths such as `.\one.c` are accepted by
+a native build, but an error saying that the C toolchain command cannot be found
+means the external compiler is missing—not that `one.c` is missing.
 
 ## Build and run
 
