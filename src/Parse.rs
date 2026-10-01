@@ -4,23 +4,56 @@
 use super::Ast::*;
 use super::Const::Constant;
 use super::TokStream::TokStream;
-use super::Tokens::Token;
+use super::Tokens::{self, Token};
 use super::Types::Type;
 
 type Parsed<T> = Result<(T, TokStream), String>;
 
-fn show(token: &Token) -> String {
-    format!("{token:?}")
+fn peekOpt(tokens: &TokStream) -> Option<&Token> {
+    tokens.peek()
 }
+
+fn peekEq(token: &Token, tokens: &TokStream) -> bool {
+    peekOpt(tokens) == Some(token)
+}
+
+fn peekIs(predicate: impl FnOnce(&Token) -> bool, tokens: &TokStream) -> bool {
+    peekOpt(tokens).is_some_and(predicate)
+}
+
+enum Expected<'a> {
+    Tok(&'a Token),
+    Name(&'a str),
+}
+
+fn ppExpected(expected: Expected<'_>) -> String {
+    match expected {
+        Expected::Tok(token) => Tokens::show(token),
+        Expected::Name(name) => name.to_owned(),
+    }
+}
+
+fn formatError(expected: Expected<'_>, actual: &Token) -> String {
+    format!(
+        "Expected {} but found {}",
+        ppExpected(expected),
+        Tokens::show(actual)
+    )
+}
+
+fn takeToken(tokens: TokStream) -> Result<(Token, TokStream), String> {
+    tokens.takeToken()
+}
+
 fn expected(name: &str, actual: &Token) -> String {
-    format!("Expected {name} but found {}", show(actual))
+    formatError(Expected::Name(name), actual)
 }
 fn expect(wanted: Token, tokens: TokStream) -> Result<TokStream, String> {
-    let (actual, rest) = tokens.takeToken()?;
+    let (actual, rest) = takeToken(tokens)?;
     if actual == wanted {
         Ok(rest)
     } else {
-        Err(expected(&show(&wanted), &actual))
+        Err(formatError(Expected::Tok(&wanted), &actual))
     }
 }
 fn isTypeSpecifier(t: &Token) -> bool {
@@ -81,6 +114,66 @@ fn unescape(s: &str) -> String {
         });
     }
     out
+}
+
+fn parseStorageClass(token: Token) -> Result<StorageClass, String> {
+    match token {
+        Token::Extern => Ok(StorageClass::Extern),
+        Token::Static => Ok(StorageClass::Static),
+        other => Err(formatError(
+            Expected::Name("a storage class specifier"),
+            &other,
+        )),
+    }
+}
+
+fn parseSignedConstant(token: Token) -> Result<Constant, String> {
+    let (value, is_int) = match token {
+        Token::ConstInt(value) => (value, true),
+        Token::ConstLong(value) => (value, false),
+        other => {
+            return Err(formatError(
+                Expected::Name("a signed integer constant"),
+                &other,
+            ))
+        }
+    };
+    if value > i64::MAX as u128 {
+        Err("Constant is too large to represent as an int or long".into())
+    } else if is_int && value <= i32::MAX as u128 {
+        Ok(Constant::Int(value as i32))
+    } else {
+        Ok(Constant::Long(value as i64))
+    }
+}
+
+fn parseUnsignedConstant(token: Token) -> Result<Constant, String> {
+    let (value, is_uint) = match token {
+        Token::ConstUInt(value) => (value, true),
+        Token::ConstULong(value) => (value, false),
+        other => {
+            return Err(formatError(
+                Expected::Name("an unsigned integer  constant"),
+                &other,
+            ))
+        }
+    };
+    if value > u64::MAX as u128 {
+        Err("Constant is too large to represent as an unsigned int or unsigned long".into())
+    } else if is_uint && value <= u32::MAX as u128 {
+        Ok(Constant::UInt(value as u32))
+    } else {
+        Ok(Constant::ULong(value as u64))
+    }
+}
+
+fn parseChar(token: &str) -> Result<Constant, String> {
+    let unescaped = unescape(token);
+    let mut chars = unescaped.chars();
+    match (chars.next(), chars.next()) {
+        (Some(character), None) => Ok(Constant::Int(character as i32)),
+        _ => Err("multi-character constant tokens not supported".into()),
+    }
 }
 
 fn parseType(specs: &[Token]) -> Result<Type, String> {
@@ -204,9 +297,7 @@ fn parseTypeAndStorageClass(specs: Vec<Token>) -> Result<(Type, Option<StorageCl
     let typ = parseType(&types)?;
     let storage = match storage.as_slice() {
         [] => None,
-        [Token::Extern] => Some(StorageClass::Extern),
-        [Token::Static] => Some(StorageClass::Static),
-        [_] => return Err("Expected a storage class specifier".into()),
+        [token] => Some(parseStorageClass(token.clone())?),
         _ => return Err("Internal error - not a storage class".into()),
     };
     Ok((typ, storage))
@@ -215,40 +306,10 @@ fn parseTypeAndStorageClass(specs: Vec<Token>) -> Result<(Type, Option<StorageCl
 pub fn parseConst(tokens: TokStream) -> Parsed<Constant> {
     let (tok, rest) = tokens.takeToken()?;
     let c = match tok {
-        Token::ConstInt(v) | Token::ConstLong(v) => {
-            if v > i64::MAX as u128 {
-                return Err("Constant is too large to represent as an int or long".into());
-            }
-            if matches!(tok, Token::ConstInt(_)) && v <= i32::MAX as u128 {
-                Constant::Int(v as i32)
-            } else {
-                Constant::Long(v as i64)
-            }
-        }
-        Token::ConstUInt(v) | Token::ConstULong(v) => {
-            if v > u64::MAX as u128 {
-                return Err(
-                    "Constant is too large to represent as an unsigned int or unsigned long".into(),
-                );
-            }
-            if matches!(tok, Token::ConstUInt(_)) && v <= u32::MAX as u128 {
-                Constant::UInt(v as u32)
-            } else {
-                Constant::ULong(v as u64)
-            }
-        }
+        token @ (Token::ConstInt(_) | Token::ConstLong(_)) => parseSignedConstant(token)?,
+        token @ (Token::ConstUInt(_) | Token::ConstULong(_)) => parseUnsignedConstant(token)?,
         Token::ConstDouble(v) => Constant::Double(v),
-        Token::ConstChar(s) => {
-            let s = unescape(&s);
-            let mut cs = s.chars();
-            let c = cs
-                .next()
-                .ok_or("multi-character constant tokens not supported")?;
-            if cs.next().is_some() {
-                return Err("multi-character constant tokens not supported".into());
-            }
-            Constant::Int(c as i32)
-        }
+        Token::ConstChar(value) => parseChar(&value)?,
         x => return Err(expected("a constant token", &x)),
     };
     Ok((c, rest))
@@ -258,8 +319,13 @@ fn parseDim(tokens: TokStream) -> Parsed<usize> {
     let (c, tokens) = parseConst(tokens)?;
     let dim = match c {
         Constant::Double(_) => return Err("Floating-point array dimensions not allowed".into()),
-        _ => usize::try_from(c.as_i128())
-            .map_err(|_| "Array dimension is out of range".to_owned())?,
+        _ => {
+            let value = c.as_i128();
+            if value > i64::MAX as i128 {
+                return Err("Array dimension is out of range".into());
+            }
+            usize::try_from(value).map_err(|_| "Array dimension is out of range".to_owned())?
+        }
     };
     Ok((dim, expect(Token::CloseBracket, tokens)?))
 }
@@ -664,7 +730,12 @@ fn parseStructDeclaration(tokens: TokStream) -> Parsed<StructDeclaration> {
     let mut members = vec![];
     if r.peek() == Some(&Token::OpenBrace) {
         (_, r) = r.takeToken()?;
-        while r.peek() != Some(&Token::CloseBrace) {
+        // The phase-11 grammar parses the first member before looking for the
+        // closing brace, so an empty structure definition is rejected.
+        let (first, next) = parseMemberDeclaration(r)?;
+        members.push(first);
+        r = next;
+        while !peekEq(&Token::CloseBrace, &r) {
             let (m, n) = parseMemberDeclaration(r)?;
             members.push(m);
             r = n
@@ -732,7 +803,7 @@ fn parseDeclaration(tokens: TokStream) -> Parsed<Declaration> {
     }
 }
 fn parseForInit(tokens: TokStream) -> Parsed<ForInit> {
-    if tokens.peek().is_some_and(isSpecifier) {
+    if peekIs(isSpecifier, &tokens) {
         let (d, r) = parseDeclaration(tokens)?;
         if let Declaration::VarDecl(v) = d {
             Ok((ForInit::InitDecl(v), r))
@@ -839,8 +910,8 @@ fn parseBlock(tokens: TokStream) -> Parsed<Block> {
     }
     Ok((Block(items), expect(Token::CloseBrace, r)?))
 }
-pub fn parse(tokens: Vec<Token>) -> Result<UntypedProgram, String> {
-    let mut r = TokStream::ofList(tokens);
+fn parseProgram(tokens: TokStream) -> Result<UntypedProgram, String> {
+    let mut r = tokens;
     let mut ds = vec![];
     while !r.isEmpty() {
         let (d, n) = parseDeclaration(r)?;
@@ -850,12 +921,6 @@ pub fn parse(tokens: Vec<Token>) -> Result<UntypedProgram, String> {
     Ok(UntypedProgram(ds))
 }
 
-pub fn parse_const(tokens: TokStream) -> Parsed<Constant> {
-    parseConst(tokens)
-}
-pub fn parse_exp(min_precedence: u8, tokens: TokStream) -> Parsed<Exp> {
-    parseExp(min_precedence, tokens)
-}
-pub fn parse_statement(tokens: TokStream) -> Parsed<Statement> {
-    parseStatement(tokens)
+pub fn parse(tokens: Vec<Token>) -> Result<UntypedProgram, String> {
+    parseProgram(TokStream::ofList(tokens))
 }

@@ -77,3 +77,69 @@ fn rejects_incomplete_declaration() {
 fn rejects_unknown_input() {
     assert!(lex("int main(void) { @ }").is_err());
 }
+
+#[test]
+fn reports_canonical_expected_token_and_name_errors() {
+    assert_eq!(
+        parseStatement(TokStream::ofList(vec![Token::Break, Token::CloseBrace])).unwrap_err(),
+        "Expected Semicolon but found CloseBrace"
+    );
+    assert_eq!(
+        parseConst(TokStream::ofList(vec![Token::Identifier("value".into())])).unwrap_err(),
+        "Expected a constant token but found (Identifier value)"
+    );
+    assert_eq!(
+        parseConst(TokStream::ofList(vec![])).unwrap_err(),
+        "Unexpected end of file"
+    );
+}
+
+#[test]
+fn rejects_empty_structure_definitions_like_the_phase_11_parser() {
+    assert_eq!(
+        parse(vec![
+            Token::Struct,
+            Token::Identifier("empty".into()),
+            Token::OpenBrace,
+            Token::CloseBrace,
+            Token::Semicolon,
+        ]),
+        Err("Expected a type specifier but found CloseBrace".into())
+    );
+}
+
+#[test]
+fn rejects_duplicate_storage_classes_and_invalid_types() {
+    assert_eq!(
+        parse(lex("static extern int value;").unwrap()),
+        Err("Internal error - not a storage class".into())
+    );
+    assert_eq!(
+        parse(lex("signed unsigned value;").unwrap()),
+        Err("Invalid type specifier".into())
+    );
+}
+
+#[test]
+fn parses_casts_abstract_declarators_and_compound_initializers() {
+    assert!(parse(
+        lex("int main(void) { int a[2] = {1, 2,}; return sizeof(int (*)[2]) + (long) a[0]; }")
+            .unwrap()
+    )
+    .is_ok());
+}
+
+#[test]
+fn rejects_dimensions_outside_the_phase_11_signed_width() {
+    assert_eq!(
+        parse(vec![
+            Token::Int,
+            Token::Identifier("values".into()),
+            Token::OpenBracket,
+            Token::ConstULong(i64::MAX as u128 + 1),
+            Token::CloseBracket,
+            Token::Semicolon,
+        ]),
+        Err("Array dimension is out of range".into())
+    );
+}
