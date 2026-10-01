@@ -182,12 +182,11 @@ The phase is complete only when this behavioral evidence exists.  Merely
 having Rust functions return `Result` is necessary, but is not sufficient to
 claim a faithful conversion.
 
-## Progress log
+## Completion log
 
 ### 2026-10-01
 
-The migration is **in progress**.  The implementation now has the Phase 11
-`Result` boundary and the first fidelity pass in place:
+The implementation completed the Phase 11 `Result` boundary and fidelity pass:
 
 - `peekOpt`, `peekEq`, and `peekIs` provide non-failing lookahead, while
   `takeToken` remains the primitive that reports end-of-file during required
@@ -224,7 +223,7 @@ The declaration-by-declaration crosswalk against `2888aa6` is now complete in
 `PARSER_RESULT_CROSSWALK.md`. It records success shapes, remaining-stream
 contracts, first-error behavior, and every inlined or decomposed Rust analogue.
 
-The Phase 11 parser-to-`Result` migration is now **complete**. Boundary
+The Phase 11 parser-to-`Result` migration is **complete**. Boundary
 fixtures cover every constant token variant and its promotion/overflow edges,
 malformed abstract and concrete declarators, structure-member restrictions,
 forward declarations, function prototypes and definitions, every statement
