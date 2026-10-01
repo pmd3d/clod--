@@ -72,7 +72,7 @@ The table uses these compact outcome labels:
 | `parseString` | `parseString` | Unescaped string + suffix | Expected `a string literal` | Direct |
 | `AbstractDeclarator` | `AbstractDeclarator` | Internal pointer/array tree | No direct failure | Direct shape |
 | `parseAbstractArrayDeclSuffix` | `parseAbstractArraySuffix` | Abstract declarator + suffix | Dimension or closing-bracket error | Equivalent iterative suffix collector; nested-array `sizeof` fixture covers type nesting and suffix |
-| `parseAbstractDeclarator` | `parseAbstractDeclarator` plus `parseDirectAbstractDeclarator` | Abstract declarator + suffix | Delimiter/type-name errors propagate at the same grammar sites | Decomposed Rust equivalent; differential fixture pending |
+| `parseAbstractDeclarator` | `parseAbstractDeclarator` plus `parseDirectAbstractDeclarator` | Abstract declarator + suffix | Delimiter/type-name errors propagate at the same grammar sites | Decomposed Rust equivalent; nested-array and malformed-delimiter fixtures cover value, suffix, and first error |
 | `processAbstractDeclarator` | `processAbstract` | Derived `Type` value | Infallible | Direct |
 | `parseUnop` | `parseUnop` | Unary operator + suffix | Expected `a unary operator` | Direct |
 | `parseBinop` | `parseBinop` | Binary operator + suffix | Expected `a binary operator` | Direct |
@@ -86,7 +86,7 @@ The table uses these compact outcome labels:
 | `parseOptionalExp` | `parseOptionalExp` | Optional expression + suffix after delimiter | Expression or expected-delimiter error | Direct |
 | `Declarator` | `Declarator` | Internal identifier/pointer/array/function tree | No direct failure | Direct shape |
 | `parseArrayDeclSuffix` | Declarator suffix handling in `parseDirectDeclarator` | Declarator + suffix | Dimension and delimiter errors propagate | Multidimensional declaration fixture covers derived-type order; truncation covers delimiter error |
-| `parseDeclarator` | `parseDeclarator`, `parseSimpleDeclarator`, and `parseDirectDeclarator` | Declarator + suffix | Expected `a simple declarator` and nested delimiter errors propagate | Decomposed equivalent; differential fixture pending |
+| `parseDeclarator` | `parseDeclarator`, `parseSimpleDeclarator`, and `parseDirectDeclarator` | Declarator + suffix | Expected `a simple declarator` and nested delimiter errors propagate | Decomposed equivalent; multidimensional, function, and malformed-declarator fixtures cover derived-type order and first error |
 | local `paramLoop` | `parseParamList` | Parameter list + suffix | First parameter/comma/closing-paren error | Malformed trailing-parameter fixture locks down first error |
 | parameter body in `paramLoop` | `parseParam` | `(Type, Declarator)` + suffix | Specifier/declarator error propagates | Named Rust boundary |
 | `processDeclarator` (including local `processParam`) | `processDeclarator` | `(name, Type, parameter names)` value | Unsupported/nested function declarator errors propagate unchanged | Direct recursion |
