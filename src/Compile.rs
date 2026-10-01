@@ -2,8 +2,10 @@
 #![allow(non_snake_case)]
 
 use std::any::Any;
+use std::cell::Cell;
 use std::path::Path;
 use std::panic::{catch_unwind, resume_unwind, AssertUnwindSafe};
+use std::sync::Once;
 
 use super::{AddressTaken, Cfg, Codegen, CompilerError::CompilerError, Emit,
     InstructionFixup, LabelLoops, Lex, Optimize, Parse, Regalloc, ReplacePseudos,
@@ -71,14 +73,39 @@ fn panic_message(payload: &(dyn Any + Send)) -> Option<&str> {
         .or_else(|| payload.downcast_ref::<&'static str>().copied())
 }
 
+thread_local! {
+    static COMPILER_HANDLES_PANIC: Cell<bool> = const { Cell::new(false) };
+}
+
+fn install_compiler_panic_hook() {
+    static INSTALL_HOOK: Once = Once::new();
+
+    INSTALL_HOOK.call_once(|| {
+        let default_hook = std::panic::take_hook();
+        std::panic::set_hook(Box::new(move |info| {
+            let handled = COMPILER_HANDLES_PANIC.get()
+                && panic_message(info.payload())
+                    .is_some_and(|message| !message.starts_with("Internal error"));
+            if !handled {
+                default_hook(info);
+            }
+        }));
+    });
+}
+
 /// Compile one already-loaded translation unit through the requested stage.
 /// Internal compiler panics remain panics; user-facing validation failures are
 /// converted to `TypeError`, matching the F# `Failure` handler.
 pub fn compile(config: &CompilerConfig, stage: Stage, optimizations: &Optimizations,
                src_file: impl AsRef<Path>, source: &str) -> Result<(), CompilerError> {
-    match catch_unwind(AssertUnwindSafe(|| {
+    install_compiler_panic_hook();
+    let previous = COMPILER_HANDLES_PANIC.replace(true);
+    let result = catch_unwind(AssertUnwindSafe(|| {
         compileInner(config, stage, optimizations, src_file.as_ref(), source)
-    })) {
+    }));
+    COMPILER_HANDLES_PANIC.set(previous);
+
+    match result {
         Ok(Ok(())) => Ok(()),
         Ok(Err(CompileFailure::Lex(message))) => Err(CompilerError::LexError(message)),
         Ok(Err(CompileFailure::Parse(message))) => Err(CompilerError::ParseError(message)),
