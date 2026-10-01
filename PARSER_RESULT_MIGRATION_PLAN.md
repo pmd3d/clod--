@@ -176,3 +176,46 @@ compiler errors.
 The phase is complete only when this behavioral evidence exists.  Merely
 having Rust functions return `Result` is necessary, but is not sufficient to
 claim a faithful conversion.
+
+## Progress log
+
+### 2026-10-01
+
+The migration is **in progress**.  The implementation now has the Phase 11
+`Result` boundary and the first fidelity pass in place:
+
+- `peekOpt`, `peekEq`, and `peekIs` provide non-failing lookahead, while
+  `takeToken` remains the primitive that reports end-of-file during required
+  consumption.
+- `Expected::{Tok, Name}`, `Tokens::show`, and exact-message parser tests cover
+  canonical expected-token and expected-name diagnostics.
+- Signed and unsigned constants, storage classes, character constants, type
+  parsing, and the signed-width array-dimension boundary return errors rather
+  than panic.
+- The F# helper boundaries for strings, unary and binary operators,
+  conditional middles, parameters, function-or-variable declarations, and
+  block items have Rust counterparts.  This makes their token-consumption and
+  error sites independently auditable even where surrounding collection code
+  is still iterative.
+- Empty structure definitions match the reviewed Phase 11 behavior and are
+  covered by a regression test.
+- `Compile` maps parser failures to `CompilerError::ParseError` without using a
+  panic as parser control flow; lexer and parser classification are covered by
+  compiler tests.
+
+The following work remains before the acceptance matrix can be marked
+complete:
+
+1. Finish the declaration-by-declaration crosswalk against `2888aa6`, recording
+   success values, remaining token streams, and exact failures rather than
+   relying only on source inspection.
+2. Replace or explicitly justify the remaining iterative collection routines
+   (specifier lists, argument/postfix/array suffixes, initializers, structure
+   members, blocks, and programs) after differential fixtures establish that
+   they preserve the F# bind and first-error order.
+3. Expand boundary fixtures for all constant variants, malformed abstract and
+   concrete declarators, every truncated delimiter, structure members,
+   prototypes/definitions, statement branches, and trailing top-level input.
+4. Add compiler integration coverage that distinguishes parser failures from
+   downstream validation failures, then run the full formatter, test, and
+   warnings-denied Clippy matrix.
