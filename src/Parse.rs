@@ -330,6 +330,14 @@ fn parseDim(tokens: TokStream) -> Parsed<usize> {
     Ok((dim, expect(Token::CloseBracket, tokens)?))
 }
 
+fn parseString(tokens: TokStream) -> Parsed<String> {
+    let (token, rest) = takeToken(tokens)?;
+    match token {
+        Token::StringLiteral(value) => Ok((unescape(&value), rest)),
+        other => Err(formatError(Expected::Name("a string literal"), &other)),
+    }
+}
+
 #[derive(Clone)]
 enum AbstractDeclarator {
     Pointer(Box<AbstractDeclarator>),
@@ -432,9 +440,10 @@ fn parsePrimaryExp(tokens: TokStream) -> Parsed<Exp> {
         Some(Token::StringLiteral(_)) => {
             let mut s = String::new();
             let mut r = tokens;
-            while let Some(Token::StringLiteral(raw)) = r.peek() {
-                s.push_str(&unescape(raw));
-                (_, r) = r.takeToken()?;
+            while matches!(peekOpt(&r), Some(Token::StringLiteral(_))) {
+                let (part, rest) = parseString(r)?;
+                s.push_str(&part);
+                r = rest;
             }
             Ok((Exp::String(s), r))
         }
@@ -479,6 +488,39 @@ fn parsePostfixExp(tokens: TokStream) -> Parsed<Exp> {
         }
     }
 }
+
+fn parseUnop(tokens: TokStream) -> Parsed<UnaryOperator> {
+    let (token, rest) = takeToken(tokens)?;
+    let operator = match token {
+        Token::Tilde => UnaryOperator::Complement,
+        Token::Hyphen => UnaryOperator::Negate,
+        Token::Bang => UnaryOperator::Not,
+        other => return Err(formatError(Expected::Name("a unary operator"), &other)),
+    };
+    Ok((operator, rest))
+}
+
+fn parseBinop(tokens: TokStream) -> Parsed<BinaryOperator> {
+    let (token, rest) = takeToken(tokens)?;
+    let operator = match token {
+        Token::Plus => BinaryOperator::Add,
+        Token::Hyphen => BinaryOperator::Subtract,
+        Token::Star => BinaryOperator::Multiply,
+        Token::Slash => BinaryOperator::Divide,
+        Token::Percent => BinaryOperator::Mod,
+        Token::LogicalAnd => BinaryOperator::And,
+        Token::LogicalOr => BinaryOperator::Or,
+        Token::DoubleEqual => BinaryOperator::Equal,
+        Token::NotEqual => BinaryOperator::NotEqual,
+        Token::LessThan => BinaryOperator::LessThan,
+        Token::LessOrEqual => BinaryOperator::LessOrEqual,
+        Token::GreaterThan => BinaryOperator::GreaterThan,
+        Token::GreaterOrEqual => BinaryOperator::GreaterOrEqual,
+        other => return Err(formatError(Expected::Name("a binary operator"), &other)),
+    };
+    Ok((operator, rest))
+}
+
 fn parseUnaryExp(tokens: TokStream) -> Parsed<Exp> {
     match tokens.npeek(3) {
         [Token::Star, ..] => {
@@ -491,13 +533,8 @@ fn parseUnaryExp(tokens: TokStream) -> Parsed<Exp> {
             let (e, r) = parseCastExp(r)?;
             Ok((Exp::AddrOf(Box::new(e)), r))
         }
-        [op @ (Token::Hyphen | Token::Tilde | Token::Bang), ..] => {
-            let op = match op {
-                Token::Hyphen => UnaryOperator::Negate,
-                Token::Tilde => UnaryOperator::Complement,
-                _ => UnaryOperator::Not,
-            };
-            let (_, r) = tokens.takeToken()?;
+        [Token::Hyphen | Token::Tilde | Token::Bang, ..] => {
+            let (op, r) = parseUnop(tokens)?;
             let (e, r) = parseCastExp(r)?;
             Ok((Exp::Unary(op, Box::new(e)), r))
         }
@@ -527,23 +564,10 @@ fn parseCastExp(tokens: TokStream) -> Parsed<Exp> {
     }
     parseUnaryExp(tokens)
 }
-fn binary(t: &Token) -> Result<BinaryOperator, String> {
-    Ok(match t {
-        Token::Plus => BinaryOperator::Add,
-        Token::Hyphen => BinaryOperator::Subtract,
-        Token::Star => BinaryOperator::Multiply,
-        Token::Slash => BinaryOperator::Divide,
-        Token::Percent => BinaryOperator::Mod,
-        Token::LogicalAnd => BinaryOperator::And,
-        Token::LogicalOr => BinaryOperator::Or,
-        Token::DoubleEqual => BinaryOperator::Equal,
-        Token::NotEqual => BinaryOperator::NotEqual,
-        Token::LessThan => BinaryOperator::LessThan,
-        Token::LessOrEqual => BinaryOperator::LessOrEqual,
-        Token::GreaterThan => BinaryOperator::GreaterThan,
-        Token::GreaterOrEqual => BinaryOperator::GreaterOrEqual,
-        x => return Err(expected("a binary operator", x)),
-    })
+fn parseConditionalMiddle(tokens: TokStream) -> Parsed<Exp> {
+    let tokens = expect(Token::QuestionMark, tokens)?;
+    let (expression, tokens) = parseExp(0, tokens)?;
+    Ok((expression, expect(Token::Colon, tokens)?))
 }
 pub fn parseExp(minPrec: u8, tokens: TokStream) -> Parsed<Exp> {
     let (mut left, mut r) = parseCastExp(tokens)?;
@@ -563,15 +587,14 @@ pub fn parseExp(minPrec: u8, tokens: TokStream) -> Parsed<Exp> {
             left = Exp::Assignment(Box::new(left), Box::new(right));
             r = n
         } else if next == Token::QuestionMark {
-            (_, r) = r.takeToken()?;
-            let (mid, n) = parseExp(0, r)?;
-            r = expect(Token::Colon, n)?;
+            let (mid, n) = parseConditionalMiddle(r)?;
+            r = n;
             let (right, n) = parseExp(p, r)?;
             left = Exp::Conditional(Box::new(left), Box::new(mid), Box::new(right));
             r = n
         } else {
-            let op = binary(&next)?;
-            (_, r) = r.takeToken()?;
+            let (op, rest) = parseBinop(r)?;
+            r = rest;
             let (right, n) = parseExp(p + 1, r)?;
             left = Exp::Binary(op, Box::new(left), Box::new(right));
             r = n
@@ -648,10 +671,8 @@ fn parseParamList(tokens: TokStream) -> Parsed<Vec<(Type, Declarator)>> {
     let mut r = expect(Token::OpenParen, tokens)?;
     let mut ps = vec![];
     loop {
-        let (specs, n) = parseTypeSpecifierList(r)?;
-        let t = parseType(&specs)?;
-        let (d, n) = parseDeclarator(n)?;
-        ps.push((t, d));
+        let (param, n) = parseParam(r)?;
+        ps.push(param);
         r = n;
         if r.peek() != Some(&Token::Comma) {
             break;
@@ -659,6 +680,13 @@ fn parseParamList(tokens: TokStream) -> Parsed<Vec<(Type, Declarator)>> {
         (_, r) = r.takeToken()?
     }
     Ok((ps, expect(Token::CloseParen, r)?))
+}
+
+fn parseParam(tokens: TokStream) -> Parsed<(Type, Declarator)> {
+    let (specifiers, tokens) = parseTypeSpecifierList(tokens)?;
+    let parameter_type = parseType(&specifiers)?;
+    let (declarator, tokens) = parseDeclarator(tokens)?;
+    Ok(((parameter_type, declarator), tokens))
 }
 fn processDeclarator(d: Declarator, base: Type) -> Result<(String, Type, Vec<String>), String> {
     match d {
@@ -747,18 +775,7 @@ fn parseStructDeclaration(tokens: TokStream) -> Parsed<StructDeclaration> {
         expect(Token::Semicolon, r)?,
     ))
 }
-fn parseDeclaration(tokens: TokStream) -> Parsed<Declaration> {
-    if matches!(
-        tokens.npeek(3),
-        [
-            Token::Struct,
-            Token::Identifier(_),
-            Token::OpenBrace | Token::Semicolon
-        ]
-    ) {
-        let (s, r) = parseStructDeclaration(tokens)?;
-        return Ok((Declaration::StructDecl(s), r));
-    }
+fn parseFunctionOrVariableDeclaration(tokens: TokStream) -> Parsed<Declaration> {
     let (specs, r) = parseSpecifierList(tokens)?;
     let (base, storage) = parseTypeAndStorageClass(specs)?;
     let (d, mut r) = parseDeclarator(r)?;
@@ -800,6 +817,22 @@ fn parseDeclaration(tokens: TokStream) -> Parsed<Declaration> {
             }),
             expect(Token::Semicolon, r)?,
         ))
+    }
+}
+
+fn parseDeclaration(tokens: TokStream) -> Parsed<Declaration> {
+    if matches!(
+        tokens.npeek(3),
+        [
+            Token::Struct,
+            Token::Identifier(_),
+            Token::OpenBrace | Token::Semicolon
+        ]
+    ) {
+        let (declaration, tokens) = parseStructDeclaration(tokens)?;
+        Ok((Declaration::StructDecl(declaration), tokens))
+    } else {
+        parseFunctionOrVariableDeclaration(tokens)
     }
 }
 fn parseForInit(tokens: TokStream) -> Parsed<ForInit> {
@@ -898,17 +931,21 @@ fn parseBlock(tokens: TokStream) -> Parsed<Block> {
         if r.isEmpty() {
             return Err("Unexpected end of file".into());
         }
-        if r.peek().is_some_and(isSpecifier) {
-            let (d, n) = parseDeclaration(r)?;
-            items.push(BlockItem::Decl(d));
-            r = n
-        } else {
-            let (s, n) = parseStatement(r)?;
-            items.push(BlockItem::Stmt(s));
-            r = n
-        }
+        let (item, next) = parseBlockItem(r)?;
+        items.push(item);
+        r = next;
     }
     Ok((Block(items), expect(Token::CloseBrace, r)?))
+}
+
+fn parseBlockItem(tokens: TokStream) -> Parsed<BlockItem> {
+    if peekIs(isSpecifier, &tokens) {
+        let (declaration, tokens) = parseDeclaration(tokens)?;
+        Ok((BlockItem::Decl(declaration), tokens))
+    } else {
+        let (statement, tokens) = parseStatement(tokens)?;
+        Ok((BlockItem::Stmt(statement), tokens))
+    }
 }
 fn parseProgram(tokens: TokStream) -> Result<UntypedProgram, String> {
     let mut r = tokens;
