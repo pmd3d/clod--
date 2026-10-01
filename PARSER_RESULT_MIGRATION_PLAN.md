@@ -207,6 +207,12 @@ The migration is **in progress**.  The implementation now has the Phase 11
 - `Compile` maps parser failures to `CompilerError::ParseError` without using a
   panic as parser control flow; lexer and parser classification are covered by
   compiler tests.
+- Differential fixtures derived from the frozen F# routines now exercise every
+  iterative collection boundary: specifiers, adjacent strings, arguments and
+  postfixes, expressions, array suffixes, parameters, nested initializers,
+  structure members, blocks, and whole programs. Successful fixtures assert
+  AST construction order and, where exposed, the unconsumed suffix; malformed
+  fixtures assert the exact first error.
 
 The declaration-by-declaration crosswalk against `2888aa6` is now complete in
 `PARSER_RESULT_CROSSWALK.md`. It records success shapes, remaining-stream
@@ -215,13 +221,9 @@ contracts, first-error behavior, and every inlined or decomposed Rust analogue.
 The following work remains before the acceptance matrix can be marked
 complete:
 
-1. Replace or explicitly justify the remaining iterative collection routines
-   (specifier lists, argument/postfix/array suffixes, initializers, structure
-   members, blocks, and programs) after differential fixtures establish that
-   they preserve the F# bind and first-error order.
-2. Expand boundary fixtures for all constant variants, malformed abstract and
+1. Expand boundary fixtures for all constant variants, malformed abstract and
    concrete declarators, every truncated delimiter, structure members,
    prototypes/definitions, statement branches, and trailing top-level input.
-3. Add compiler integration coverage that distinguishes parser failures from
+2. Add compiler integration coverage that distinguishes parser failures from
    downstream validation failures, then run the full formatter, test, and
    warnings-denied Clippy matrix.
