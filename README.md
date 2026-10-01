@@ -1,8 +1,9 @@
 # clod--
 
-`clod--` is a C compiler driver written in Rust. It preserves the stage-oriented
-command-line interface of the original implementation while using the host C
-toolchain for preprocessing, validation, code generation, assembly, and linking.
+`clod--` is a C compiler written in Rust. It preserves the stage-oriented
+command-line interface and compilation flow of the original implementation.
+The host C toolchain preprocesses the input and assembles or links the compiler's
+generated assembly; lexing through code generation runs in the Rust compiler.
 
 ## Prerequisites
 
